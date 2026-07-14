@@ -37,3 +37,6 @@ local.properties
 
 # Saida de build de IDE (Eclipse/VSCode)
 bin/
+
+# Vetores ProcessorTests do 65816 (~138 MB, baixados localmente)
+/snes/src/test/resources/65816/

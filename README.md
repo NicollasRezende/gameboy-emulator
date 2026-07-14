@@ -129,7 +129,8 @@ GameBoy (scheduler: CPU → PPU/APU/timer a cada M-cycle)
 └── Cartridge → Mbc (RomOnly · MBC1 · MBC2 · MBC3+RTC · MBC5) + Cheats
 
 :api      interface EmulatorCore — o contrato que qualquer console implementa
-:nes      NES — CPU 6502 (nestest), PPU scanline, APU, mappers 0–3
+:nes      NES — CPU 6502 (nestest), PPU scanline, APU, mappers 0–4 (MMC3+IRQ)
+:snes     SNES — CPU 65C816 validada pelos ProcessorTests (em construção)
 :cli      runner (serial, trace, screenshot, save, paleta)
 :desktop  app multi-sistema (seletor de console, biblioteca, áudio, gamepad, save states…)
 homebrew/ CINZA — ROM autoral + artigo técnico
@@ -178,7 +179,11 @@ ROM autoral, livre, pronta para jogar.
 - [x] **NES** — CPU 6502 (nestest instrução a instrução), PPU, APU, mappers 0–3, save states
 - [x] **NES fase 2** — MMC3 (banking + IRQ de scanline, destrava SMB3/Mega Man 3-6/Kirby…) e canal DMC (samples)
 - [ ] **NES — precisão de barramento** — IRQ do MMC3 clocado por A12 real e PPU dot-accurate (o `mmc3_test` de conformidade estrita ainda falha; a aproximação por scanline cobre os jogos, não o teste exato)
-- [ ] **SNES** — o próximo console da escada (65C816 + SPC700)
+- [ ] **SNES** — em construção pela escada de sempre:
+  - [x] **CPU 65C816** — validada contra os ProcessorTests (254 opcodes em modo emulação, ~2,5 mi de vetores estado-a-estado)
+  - [ ] PPU (modos de fundo 0–7, sprites, Mode 7)
+  - [ ] SPC700 + DSP (áudio)
+  - [ ] DMA/HDMA + integração (rodar jogo)
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 
