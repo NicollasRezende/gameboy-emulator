@@ -1,0 +1,39 @@
+# ROMs comerciais e saves — NUNCA versionar (copyright / dados pessoais)
+*.gb
+*.gbc
+*.zip
+*.sav
+*.rtc
+/roms/
+/saves/
+
+# ROMs de teste livres (Blargg, Mooneye, dmg-acid2) podem ficar aqui:
+!/core/src/test/resources/roms/**
+
+# ROM homebrew AUTORAL (CINZA) — versionada de propósito:
+!/homebrew/**
+
+# Homebrew autoral (CINZA) — ROM nossa, versionada de proposito:
+!/homebrew/**
+
+# Android / Gradle
+.gradle/
+build/
+/captures/
+local.properties
+*.apk
+*.aab
+*.keystore
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Docs internos de design (nossos, fora do repo publico)
+/docs/
+
+# atalho gerado localmente (aponta p/ caminhos absolutos da maquina)
+
+# Saida de build de IDE (Eclipse/VSCode)
+bin/
