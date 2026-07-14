@@ -263,9 +263,22 @@ O primeiro teste do contrato foi o **NES**. E o método não mudou uma vírgula:
 
 A prova de que a escada sustenta peso: **The Legend of Zelda** — MBC... não: **MMC1**,
 o vocabulário muda de console — rodando na biblioteca ao lado dos jogos de Game Boy
-([a captura está no README](README.md#-rodando-de-verdade)). As aproximações conhecidas
-estão documentadas no roadmap (MMC3, DMC, PPU dot-accurate) — como sempre, o que falta
-tem nome, não desculpa.
+([a captura está no README](README.md#-rodando-de-verdade)).
+
+Depois vieram o **MMC3** (com IRQ de scanline, que destrava a maior fatia do catálogo —
+Super Mario Bros. 3, Mega Man 3-6, Kirby) e o **DMC**, o quinto canal da APU, que toca
+samples. E aqui mora uma lição de honestidade de engenharia. O IRQ do MMC3, no hardware,
+é contado pela linha **A12** do barramento da PPU. Escolhi aproximá-lo clocando o contador
+uma vez por scanline — o que cobre os jogos de verdade, mas **falha** no teste de
+conformidade estrito (`mmc3_test`), que verifica o A12 sendo alternado via PPUADDR.
+
+Seria tentador "consertar" clocando também nas escritas de PPUADDR. Não fiz — de
+propósito. Escritas de paleta vão para `$3F00`, cujo bit 12 está setado; um modelo de A12
+meia-boca dispararia o contador a cada atualização de paleta e **quebraria** justamente os
+jogos que hoje funcionam. A correção certa é modelar o A12 no nível do barramento, que é o
+mesmo trabalho da PPU dot-accurate — então essas duas coisas andam juntas no roadmap. Uma
+aproximação limpa que roda os jogos vale mais que uma precisão pela metade que os quebra:
+o que falta tem nome, não desculpa.
 
 ---
 

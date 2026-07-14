@@ -1,14 +1,19 @@
 package nes
 
 /**
- * APU do NES (2A03): 2 pulsos (duty/envelope/sweep/length), triângulo (linear counter)
- * e ruído (LFSR). DMC não implementado (limitação documentada). Amostra a 48 kHz.
+ * APU do NES (2A03): 2 pulsos (duty/envelope/sweep/length), triângulo (linear counter),
+ * ruído (LFSR) e DMC (samples delta-modulados, com IRQ). Amostra a 48 kHz.
  */
 class NesApu {
     private val pulse1 = Pulse(1)
     private val pulse2 = Pulse(2)
     private val tri = TriangleCh()
     private val noise = NoiseCh()
+    private val dmc = Dmc()
+
+    /** O DMC lê amostras da memória da CPU e pode gerar IRQ — ligados pelo console. */
+    var dmcMemRead: ((Int) -> Int)? = null
+    var onDmcIrq: (() -> Unit)? = null
 
     private var frameCounter = 0.0
     private var sampleCounter = 0.0
@@ -25,6 +30,7 @@ class NesApu {
     fun tick(cpuCycles: Int) {
         repeat(cpuCycles) {
             tri.clockTimer()             // triângulo roda no clock da CPU
+            dmcMemRead?.let { mr -> dmc.clock(mr) { onDmcIrq?.invoke() } } // DMC roda no clock da CPU
             if (it % 2 == 0) { pulse1.clockTimer(); pulse2.clockTimer(); noise.clockTimer() } // APU clock = CPU/2
 
             frameCounter += 1.0
@@ -53,7 +59,7 @@ class NesApu {
 
     private fun mix() {
         val p = 0.00752 * (pulse1.output() + pulse2.output())
-        val tnd = 0.00851 * tri.output() + 0.00494 * noise.output()
+        val tnd = 0.00851 * tri.output() + 0.00494 * noise.output() + 0.00335 * dmc.output()
         val s = ((p + tnd) * 32000).toInt().coerceIn(-32768, 32767).toShort()
         buffer.add(s); buffer.add(s) // estéreo (mono duplicado)
     }
@@ -75,6 +81,10 @@ class NesApu {
             0x400C -> noise.writeCtrl(v)
             0x400E -> noise.writePeriod(v)
             0x400F -> noise.writeLength(v)
+            0x4010 -> dmc.writeCtrl(v)
+            0x4011 -> dmc.writeDirect(v)
+            0x4012 -> dmc.writeAddr(v)
+            0x4013 -> dmc.writeLen(v)
             0x4015 -> {
                 pulse1.enabled = v and 1 != 0; pulse2.enabled = v and 2 != 0
                 tri.enabled = v and 4 != 0; noise.enabled = v and 8 != 0
@@ -82,6 +92,7 @@ class NesApu {
                 if (!pulse2.enabled) pulse2.length = 0
                 if (!tri.enabled) tri.length = 0
                 if (!noise.enabled) noise.length = 0
+                dmc.setEnabled(v and 0x10 != 0)
             }
             0x4017 -> { /* modo do frame counter — aproximação de 4 passos */ }
         }
@@ -93,6 +104,8 @@ class NesApu {
         if (pulse2.length > 0) s = s or 2
         if (tri.length > 0) s = s or 4
         if (noise.length > 0) s = s or 8
+        if (dmc.bytesRemaining > 0) s = s or 0x10
+        if (dmc.irqPending) s = s or 0x80
         return s
     }
 
@@ -215,5 +228,73 @@ class NesApu {
             if (!enabled || length == 0 || lfsr and 1 != 0) return 0
             return if (constVolume) volume else envVolume
         }
+    }
+
+    /**
+     * Delta Modulation Channel: reproduz amostras de 1-bit (delta) lidas da memória da CPU,
+     * ajustando o nível de saída em ±2 por bit. Pode reiniciar em loop ou gerar IRQ ao fim.
+     * A parada de CPU do DMA de amostra é aproximada (omitida) — o foco é o áudio.
+     */
+    class Dmc {
+        var bytesRemaining = 0
+        var irqPending = false
+        private var irqEnabled = false
+        private var loop = false
+        private var period = RATES[0]
+        private var output = 0            // nível de 7 bits (0..127)
+        private var sampleAddr = 0xC000
+        private var sampleLen = 1
+        private var curAddr = 0xC000
+        private var shiftReg = 0
+        private var bitsRemaining = 8
+        private var silence = true
+        private var timer = RATES[0]
+
+        companion object {
+            /** Período do timer em ciclos de CPU (NTSC). */
+            val RATES = intArrayOf(428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54)
+        }
+
+        fun writeCtrl(v: Int) {
+            irqEnabled = v and 0x80 != 0
+            loop = v and 0x40 != 0
+            period = RATES[v and 0x0F]
+            if (!irqEnabled) irqPending = false
+        }
+        fun writeDirect(v: Int) { output = v and 0x7F }
+        fun writeAddr(v: Int) { sampleAddr = 0xC000 or (v shl 6) }
+        fun writeLen(v: Int) { sampleLen = (v shl 4) or 1 }
+
+        fun setEnabled(on: Boolean) {
+            irqPending = false
+            if (!on) bytesRemaining = 0
+            else if (bytesRemaining == 0) { curAddr = sampleAddr; bytesRemaining = sampleLen }
+        }
+
+        /** Clocado a cada ciclo de CPU. */
+        fun clock(memRead: (Int) -> Int, onIrq: () -> Unit) {
+            if (--timer > 0) return
+            timer = period
+            if (!silence) {
+                if (shiftReg and 1 != 0) { if (output <= 125) output += 2 }
+                else { if (output >= 2) output -= 2 }
+            }
+            shiftReg = shiftReg shr 1
+            if (--bitsRemaining <= 0) {
+                bitsRemaining = 8
+                if (bytesRemaining > 0) {
+                    shiftReg = memRead(curAddr)
+                    silence = false
+                    curAddr = if (curAddr >= 0xFFFF) 0x8000 else curAddr + 1
+                    bytesRemaining--
+                    if (bytesRemaining == 0) {
+                        if (loop) { curAddr = sampleAddr; bytesRemaining = sampleLen }
+                        else if (irqEnabled) { irqPending = true; onIrq() }
+                    }
+                } else silence = true
+            }
+        }
+
+        fun output(): Int = output
     }
 }

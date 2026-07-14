@@ -15,6 +15,13 @@ class NesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
 
     init {
         if (save != null) for (i in save.indices) if (i < cart.prgRam.size) cart.prgRam[i] = save[i] and 0xFF
+        // IRQ de scanline do MMC3: a PPU clica o contador; o mapper puxa a linha de IRQ da CPU
+        ppu.onScanline = { cart.clockScanlineIrq() }
+        cart.onMapperIrq = { cpu.irqPending = true }
+        cart.onMapperIrqClear = { cpu.irqPending = false }
+        // DMC lê amostras da memória da CPU e pode gerar IRQ
+        apu.dmcMemRead = { addr -> bus.read(addr) }
+        apu.onDmcIrq = { cpu.irqPending = true }
         cpu.reset()
     }
 

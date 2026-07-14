@@ -86,8 +86,9 @@ scroll/sprites e o mapper, todos validados por teste antes de encostar num jogo.
 - 🖼️ **PPU pixel-FIFO** — fundo, janela e sprites; **Game Boy Color** em cor real (RGB555, VRAM banking, HDMA, double-speed).
 - 💾 **MBC1 / MBC2 / MBC3 (+RTC) / MBC5** + save de bateria + **save states** (4 slots).
 - 🔊 **APU** de 4 canais (2 ondas quadradas, wave, ruído) com **canais mutáveis**.
-- 🎮 **NES** (novo): CPU 6502 validada instrução a instrução pelo `nestest.log`, PPU por scanline
-  (scroll, sprites, sprite-0 hit), APU, mappers NROM/MMC1/UNROM/CNROM.
+- 🎮 **NES**: CPU 6502 validada instrução a instrução pelo `nestest.log`, PPU por scanline
+  (scroll, sprites, sprite-0 hit), APU de 5 canais (incl. **DMC**), mappers NROM/MMC1/UNROM/CNROM/**MMC3**
+  (com **IRQ de scanline** — o split de tela de SMB3, Mega Man e cia.).
 - 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
 - ✅ **115 testes automatizados** — Blargg, dmg-acid2, cgb-acid2, mooneye e nestest.
@@ -173,7 +174,8 @@ ROM autoral, livre, pronta para jogar.
 - [x] **CINZA** — ROM homebrew autoral rodando no emulador
 - [x] **Arquitetura multi-sistema** — interface `EmulatorCore` + seletor de console na biblioteca
 - [x] **NES** — CPU 6502 (nestest instrução a instrução), PPU, APU, mappers 0–3, save states
-- [ ] **NES fase 2** — MMC3 (+IRQ de scanline), canal DMC, PPU dot-accurate
+- [x] **NES fase 2** — MMC3 (banking + IRQ de scanline, destrava SMB3/Mega Man 3-6/Kirby…) e canal DMC (samples)
+- [ ] **NES — precisão de barramento** — IRQ do MMC3 clocado por A12 real e PPU dot-accurate (o `mmc3_test` de conformidade estrita ainda falha; a aproximação por scanline cobre os jogos, não o teste exato)
 - [ ] **SNES** — o próximo console da escada (65C816 + SPC700)
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1

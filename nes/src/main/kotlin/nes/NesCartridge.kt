@@ -5,7 +5,7 @@ enum class Mirroring { HORIZONTAL, VERTICAL, SINGLE_LOW, SINGLE_HIGH }
 
 /**
  * Cartucho NES no formato iNES. Parseia o cabeçalho e delega o mapeamento ao mapper
- * (0 NROM, 1 MMC1, 2 UNROM, 3 CNROM).
+ * (0 NROM, 1 MMC1, 2 UNROM, 3 CNROM, 4 MMC3 com IRQ de scanline).
  */
 class NesCartridge(bytes: IntArray) {
     val prgRom: IntArray
@@ -38,6 +38,8 @@ class NesCartridge(bytes: IntArray) {
 
     private val prgBanks16 = (prgRom.size / 0x4000).coerceAtLeast(1)
     private val chrBanks8 = (chr.size / 0x2000).coerceAtLeast(1)
+    private val prgBanks8 = (prgRom.size / 0x2000).coerceAtLeast(1)
+    private val chrBanks1 = (chr.size / 0x400).coerceAtLeast(1)
 
     // ---- estado dos mappers ----
     // MMC1
@@ -48,6 +50,17 @@ class NesCartridge(bytes: IntArray) {
     private var mmc1PrgBank = 0
     // UNROM / CNROM
     private var bankSelect = 0
+    // MMC3 (mapper 4)
+    private val mmc3Regs = IntArray(8)
+    private var mmc3BankSelect = 0
+    private var mmc3IrqLatch = 0
+    private var mmc3IrqCounter = 0
+    private var mmc3IrqReload = false
+    private var mmc3IrqEnabled = false
+
+    /** Disparo/limpeza da linha de IRQ do mapper (o console liga na CPU). */
+    var onMapperIrq: () -> Unit = {}
+    var onMapperIrqClear: () -> Unit = {}
 
     /** Leitura da CPU em 0x6000–0xFFFF. */
     fun cpuRead(addr: Int): Int = when {
@@ -66,6 +79,16 @@ class NesCartridge(bytes: IntArray) {
                 val bank = if (addr < 0xC000) bankSelect % prgBanks16 else prgBanks16 - 1
                 prgRom[bank * 0x4000 + (addr and 0x3FFF)]
             }
+            4 -> {
+                val mode = (mmc3BankSelect shr 6) and 1 // 0: R6 em 0x8000; 1: R6 em 0xC000
+                val bank = when {
+                    addr < 0xA000 -> if (mode == 0) mmc3Regs[6] else prgBanks8 - 2
+                    addr < 0xC000 -> mmc3Regs[7]
+                    addr < 0xE000 -> if (mode == 0) prgBanks8 - 2 else mmc3Regs[6]
+                    else -> prgBanks8 - 1 // último banco de 8K sempre fixo
+                }
+                prgRom[(bank % prgBanks8) * 0x2000 + (addr and 0x1FFF)]
+            }
             else -> prgRom[(addr - 0x8000) % prgRom.size] // NROM/CNROM: 16K espelhado ou 32K
         }
         else -> 0
@@ -80,8 +103,34 @@ class NesCartridge(bytes: IntArray) {
                 1 -> mmc1Write(addr, v)
                 2 -> bankSelect = v and 0x0F
                 3 -> bankSelect = v and 0x03
+                4 -> mmc3Write(addr, v)
             }
         }
+    }
+
+    private fun mmc3Write(addr: Int, v: Int) {
+        when (addr and 0xE001) {
+            0x8000 -> mmc3BankSelect = v
+            0x8001 -> mmc3Regs[mmc3BankSelect and 7] = v
+            0xA000 -> mirroring = if (v and 1 == 0) Mirroring.VERTICAL else Mirroring.HORIZONTAL
+            0xA001 -> {} // proteção da PRG-RAM (ignorada)
+            0xC000 -> mmc3IrqLatch = v
+            0xC001 -> { mmc3IrqCounter = 0; mmc3IrqReload = true }
+            0xE000 -> { mmc3IrqEnabled = false; onMapperIrqClear() }
+            0xE001 -> mmc3IrqEnabled = true
+        }
+    }
+
+    /**
+     * Clocado uma vez por scanline visível — aproxima as bordas de subida do A12 que o MMC3
+     * conta. Quando o contador chega a zero com o IRQ habilitado, dispara a interrupção
+     * (é isso que faz o "split" de tela de jogos como Super Mario Bros. 3).
+     */
+    fun clockScanlineIrq() {
+        if (mapperId != 4) return
+        if (mmc3IrqCounter == 0 || mmc3IrqReload) { mmc3IrqCounter = mmc3IrqLatch; mmc3IrqReload = false }
+        else mmc3IrqCounter--
+        if (mmc3IrqCounter == 0 && mmc3IrqEnabled) onMapperIrq()
     }
 
     private fun mmc1Write(addr: Int, v: Int) {
@@ -114,6 +163,20 @@ class NesCartridge(bytes: IntArray) {
             chr[a]
         }
         3 -> chr[((bankSelect % chrBanks8) * 0x2000 + addr) % chr.size]
+        4 -> {
+            val inv = mmc3BankSelect and 0x80 != 0 // inversão do A12: troca os bancos de 2K/1K
+            val region = (addr shr 10) and 7
+            val bank1k = if (!inv) when (region) {
+                0 -> mmc3Regs[0] and 0xFE; 1 -> mmc3Regs[0] or 1
+                2 -> mmc3Regs[1] and 0xFE; 3 -> mmc3Regs[1] or 1
+                4 -> mmc3Regs[2]; 5 -> mmc3Regs[3]; 6 -> mmc3Regs[4]; else -> mmc3Regs[5]
+            } else when (region) {
+                0 -> mmc3Regs[2]; 1 -> mmc3Regs[3]; 2 -> mmc3Regs[4]; 3 -> mmc3Regs[5]
+                4 -> mmc3Regs[0] and 0xFE; 5 -> mmc3Regs[0] or 1
+                6 -> mmc3Regs[1] and 0xFE; else -> mmc3Regs[1] or 1
+            }
+            chr[((bank1k % chrBanks1) * 0x400 + (addr and 0x3FF)) % chr.size]
+        }
         else -> chr[addr % chr.size]
     } and 0xFF
 
@@ -124,12 +187,18 @@ class NesCartridge(bytes: IntArray) {
     internal fun saveState(o: java.io.DataOutputStream) {
         o.writeInt(shift); o.writeInt(mmc1Control); o.writeInt(mmc1ChrBank0); o.writeInt(mmc1ChrBank1)
         o.writeInt(mmc1PrgBank); o.writeInt(bankSelect); o.writeUTF(mirroring.name)
+        for (r in mmc3Regs) o.writeInt(r)
+        o.writeInt(mmc3BankSelect); o.writeInt(mmc3IrqLatch); o.writeInt(mmc3IrqCounter)
+        o.writeBoolean(mmc3IrqReload); o.writeBoolean(mmc3IrqEnabled)
         for (b in prgRam) o.writeByte(b)
         if (chrIsRam) for (b in chr) o.writeByte(b)
     }
     internal fun loadState(i: java.io.DataInputStream) {
         shift = i.readInt(); mmc1Control = i.readInt(); mmc1ChrBank0 = i.readInt(); mmc1ChrBank1 = i.readInt()
         mmc1PrgBank = i.readInt(); bankSelect = i.readInt(); mirroring = Mirroring.valueOf(i.readUTF())
+        for (j in mmc3Regs.indices) mmc3Regs[j] = i.readInt()
+        mmc3BankSelect = i.readInt(); mmc3IrqLatch = i.readInt(); mmc3IrqCounter = i.readInt()
+        mmc3IrqReload = i.readBoolean(); mmc3IrqEnabled = i.readBoolean()
         for (j in prgRam.indices) prgRam[j] = i.readUnsignedByte()
         if (chrIsRam) for (j in chr.indices) chr[j] = i.readUnsignedByte()
     }

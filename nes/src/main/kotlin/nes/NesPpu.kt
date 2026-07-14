@@ -25,6 +25,9 @@ class NesPpu(private val cart: NesCartridge, private val requestNmi: () -> Unit)
     private var scanline = 261
     private var dotAccum = 0
 
+    /** Chamado a cada scanline visível com renderização ligada (clock do IRQ do MMC3). */
+    var onScanline: (() -> Unit)? = null
+
     private fun renderingEnabled() = mask and 0x18 != 0
 
     companion object {
@@ -126,7 +129,7 @@ class NesPpu(private val cart: NesCartridge, private val requestNmi: () -> Unit)
             when {
                 scanline < 240 -> {
                     renderScanline(scanline)
-                    if (renderingEnabled()) { incrementY(); copyHorizontal() }
+                    if (renderingEnabled()) { onScanline?.invoke(); incrementY(); copyHorizontal() }
                 }
                 scanline == 241 -> {
                     status = status or 0x80
