@@ -140,7 +140,8 @@ git push origin main
 
 | Quero mudar… | Módulo |
 |---|---|
-| Emulação (CPU, PPU, APU, MBC, timer…) | `:core` — Kotlin puro, testável na JVM |
+| Emulação Game Boy (CPU, PPU, APU, MBC…) | `:core` — Kotlin puro, testável na JVM |
+| Emulação NES (6502, PPU, APU, mappers) | `:nes` — Kotlin puro, validado pelo nestest |
 | App de jogar (janela, menus, input, áudio) | `:desktop` |
 | Runner de terminal (trace, screenshot) | `:cli` |
 | Contrato multi-sistema (`EmulatorCore`) | `:api` — implementar isto = console novo |
@@ -150,7 +151,8 @@ git push origin main
 ## 💡 Ideias de contribuição
 
 - 🎯 Bits-exatos do MBC1 · write-window do TIMA (fecha os mooneye restantes)
-- 🎮 **Core NES** — o próximo console (6502 validada pelo `nestest.log`, PPU, mappers)
+- 🎮 **NES fase 2** — mapper MMC3 (+IRQ de scanline), canal DMC da APU, PPU dot-accurate
+- 🎮 **Core SNES** — o próximo console da escada (65C816 + SPC700)
 - ⚡ Otimização dos hot loops (FIFO/APU sem alocação)
 - 🕹️ MBC1 multicart · HuC1 · boot ROM opcional
 - 💾 Rewind · cheat scanner · TAS tools

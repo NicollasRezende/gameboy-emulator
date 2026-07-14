@@ -11,7 +11,7 @@ Os dois lados do cartucho, construídos aqui.
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
 ![JDK](https://img.shields.io/badge/JDK-21-orange?logo=openjdk&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-112%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-115%20passing-brightgreen)
 
 <br>
 
@@ -69,9 +69,11 @@ o método, os bugs e as lições — na ordem em que aconteceram</sub>
 - 🖼️ **PPU pixel-FIFO** — fundo, janela e sprites; **Game Boy Color** em cor real (RGB555, VRAM banking, HDMA, double-speed).
 - 💾 **MBC1 / MBC2 / MBC3 (+RTC) / MBC5** + save de bateria + **save states** (4 slots).
 - 🔊 **APU** de 4 canais (2 ondas quadradas, wave, ruído) com **canais mutáveis**.
-- 🕹️ **App desktop completo**: biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
+- 🎮 **NES** (novo): CPU 6502 validada instrução a instrução pelo `nestest.log`, PPU por scanline
+  (scroll, sprites, sprite-0 hit), APU, mappers NROM/MMC1/UNROM/CNROM.
+- 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
-- ✅ **112 testes automatizados** — Blargg, dmg-acid2, cgb-acid2 e 24 testes mooneye.
+- ✅ **115 testes automatizados** — Blargg, dmg-acid2, cgb-acid2, mooneye e nestest.
 
 ## 🎯 Precisão
 
@@ -86,7 +88,8 @@ A precisão não é opinião — é medida por ROMs de teste da comunidade, exec
 | **dmg-acid2** | PPU do Game Boy (fundo/janela/sprites/prioridade) | ✅ pixel-perfect |
 | **cgb-acid2** | PPU do Game Boy **Color** (paletas/atributos) | ✅ pixel-perfect |
 | **mooneye** | banking (MBC1/5), timer, DAA, e mais | ✅ 24 testes |
-| **Save states** | determinismo (snapshot → replay idêntico) | ✅ |
+| **nestest** (NES) | CPU 6502: 8991 instruções comparadas com o log de referência (PC, registradores, flags, ciclos) | ✅ instrução a instrução |
+| **Save states** | determinismo (snapshot → replay idêntico), GB e NES | ✅ |
 
 <div align="center">
 <sub>Quer entender <i>como</i> cada elo dessa cadeia foi conquistado?</sub><br><br>
@@ -106,6 +109,7 @@ GameBoy (scheduler: CPU → PPU/APU/timer a cada M-cycle)
 └── Cartridge → Mbc (RomOnly · MBC1 · MBC2 · MBC3+RTC · MBC5) + Cheats
 
 :api      interface EmulatorCore — o contrato que qualquer console implementa
+:nes      NES — CPU 6502 (nestest), PPU scanline, APU, mappers 0–3
 :cli      runner (serial, trace, screenshot, save, paleta)
 :desktop  app multi-sistema (seletor de console, biblioteca, áudio, gamepad, save states…)
 homebrew/ CINZA — ROM autoral + artigo técnico
@@ -150,8 +154,9 @@ ROM autoral, livre, pronta para jogar.
 - [x] APU (som) · app desktop · atalho clicável
 - [x] **CINZA** — ROM homebrew autoral rodando no emulador
 - [x] **Arquitetura multi-sistema** — interface `EmulatorCore` + seletor de console na biblioteca
-- [ ] **NES** — o próximo console da escada (CPU 6502 validada pelo `nestest`, PPU, mappers)
-- [ ] **SNES** — depois do NES (65C816 + SPC700)
+- [x] **NES** — CPU 6502 (nestest instrução a instrução), PPU, APU, mappers 0–3, save states
+- [ ] **NES fase 2** — MMC3 (+IRQ de scanline), canal DMC, PPU dot-accurate
+- [ ] **SNES** — o próximo console da escada (65C816 + SPC700)
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 

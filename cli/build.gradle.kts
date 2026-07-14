@@ -6,7 +6,9 @@ plugins {
 repositories { mavenCentral() }
 
 dependencies {
+    implementation(project(":api"))
     implementation(project(":core"))
+    implementation(project(":nes"))
 }
 
 application {

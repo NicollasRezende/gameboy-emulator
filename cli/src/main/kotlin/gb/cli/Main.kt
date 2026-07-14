@@ -1,10 +1,13 @@
 package gb.cli
 
+import emu.EmulatorCore
 import gb.Cartridge
 import gb.Cpu
 import gb.DmgPalettes
 import gb.GameBoy
+import gb.GbCore
 import gb.Memory
+import nes.NesCore
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -62,16 +65,16 @@ fun main(args: Array<String>) {
             val b = File(savePath).readBytes(); IntArray(b.size) { b[it].toInt() and 0xFF }
         } else null
 
-        val gb = GameBoy(rom, save)
+        val core: EmulatorCore = if (path.lowercase().endsWith(".nes")) NesCore(rom, save) else GbCore(rom, save)
         val paletteName = args.indexOf("--palette").let { if (it >= 0 && it + 1 < args.size) args[it + 1] else null }
-        if (paletteName != null) gb.ppu.dmgPalette = DmgPalettes.byName(paletteName)
+        if (paletteName != null) (core as? GbCore)?.gameBoy?.ppu?.dmgPalette = DmgPalettes.byName(paletteName)
 
-        repeat(frames) { gb.runFrame() }
-        writePng(gb.framebuffer, outPath, scale = 4)
+        repeat(frames) { core.runFrame() }
+        writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
         println("── PNG salvo em $outPath ($frames frames, escala 4x) ──")
 
         if (savePath != null) {
-            val snap = gb.saveRam()
+            val snap = core.saveRam()
             if (snap != null) {
                 File(savePath).writeBytes(ByteArray(snap.size) { snap[it].toByte() })
                 println("── save gravado em $savePath (${snap.size} bytes) ──")
@@ -113,9 +116,8 @@ fun main(args: Array<String>) {
     }
 }
 
-/** Exporta o framebuffer 160×144 (ARGB) como PNG, ampliado por `scale`. */
-private fun writePng(fb: IntArray, path: String, scale: Int) {
-    val w = 160; val h = 144
+/** Exporta um framebuffer ARGB como PNG, ampliado por `scale`. */
+private fun writePng(fb: IntArray, path: String, scale: Int, w: Int = 160, h: Int = 144) {
     val img = BufferedImage(w * scale, h * scale, BufferedImage.TYPE_INT_RGB)
     for (y in 0 until h) for (x in 0 until w) {
         val rgb = fb[y * w + x]
