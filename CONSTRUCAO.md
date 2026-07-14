@@ -32,6 +32,7 @@ O outro lado da história — a ROM autoral que roda nele — está em
 11. [A cadeia de validação](#11-a-cadeia-de-validação)
 12. [Lições que só se aprendem apanhando](#12-lições-que-só-se-aprendem-apanhando)
 13. [E então, o jogo](#13-e-então-o-jogo)
+14. [A escada: o segundo console](#14-a-escada-o-segundo-console)
 
 ---
 
@@ -234,6 +235,37 @@ A ordem foi essa — **emulador primeiro, jogo depois** — e não por acaso: s�
 verdade uma plataforma quem já implementou os dois lados dela. O artigo da CINZA percorre
 o mesmo hardware deste documento, mas do ponto de vista de quem *escreve para ele* em vez
 de quem o *implementa*.
+
+## 14. A escada: o segundo console
+
+A lição da fronteira (§12) foi posta à prova: se o núcleo realmente não conhece o
+front-end, então o front-end também não deveria conhecer o núcleo. Extraímos o contrato
+— a interface `EmulatorCore` (framebuffer, `runFrame`, botões, áudio, save/state) — e o
+Game Boy virou *uma implementação dela*. O app desktop passou a ser um seletor de
+sistemas: adicionar um console novo é implementar a interface e registrar uma linha.
+
+O primeiro teste do contrato foi o **NES**. E o método não mudou uma vírgula:
+
+1. **CPU primeiro, com oráculo.** O 6502 tem o equivalente do Blargg elevado ao cubo: o
+   **nestest.log**, um log de referência com o estado da CPU **a cada instrução** — PC,
+   registradores, flags e ciclo acumulado, 8991 linhas, incluindo os opcodes
+   não-oficiais que jogos reais usam. Nosso teste executa a ROM e compara linha a linha;
+   qualquer divergência aponta a instrução exata. A CPU passou **na primeira execução
+   do teste** — não por sorte, mas porque o contrato de cada opcode estava especificado
+   antes de escrever o `when`.
+2. **PPU com os registradores do hardware.** A PPU do NES não tem um "scroll register" —
+   tem os internos `v/t/x/w` (os "loopy registers"), e o scroll emerge das transições
+   entre eles. Implementamos por scanline com a travessia real de nametables, sprites
+   com prioridade e o **sprite-0 hit** (o truque que jogos usam para dividir a tela).
+3. **O resto da máquina**: APU (2 pulsos, triângulo, ruído — sem o canal DMC, por
+   enquanto), mappers NROM/MMC1/UNROM/CNROM, controles, save states com o mesmo teste
+   de determinismo do §10.
+
+A prova de que a escada sustenta peso: **The Legend of Zelda** — MBC... não: **MMC1**,
+o vocabulário muda de console — rodando na biblioteca ao lado dos jogos de Game Boy
+([a captura está no README](README.md#-rodando-de-verdade)). As aproximações conhecidas
+estão documentadas no roadmap (MMC3, DMC, PPU dot-accurate) — como sempre, o que falta
+tem nome, não desculpa.
 
 ---
 

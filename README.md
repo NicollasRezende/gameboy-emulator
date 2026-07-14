@@ -63,6 +63,23 @@ o método, os bugs e as lições — na ordem em que aconteceram</sub>
 </tr>
 </table>
 
+## 🕹️ Rodando de verdade
+
+<div align="center">
+
+<img src="screenshots/nes-zelda.png" width="640" alt="The Legend of Zelda rodando no core NES">
+
+<sub><b>The Legend of Zelda</b> (NES, mapper MMC1) rodando no app desktop — CPU 6502, PPU com
+scroll/sprites e o mapper, todos validados por teste antes de encostar num jogo.</sub>
+
+<br><br>
+
+<img src="screenshots/nes-biblioteca.png" width="480" alt="Biblioteca multi-sistema">
+
+<sub>A biblioteca multi-sistema: abas por console, busca e cards por jogo.</sub>
+
+</div>
+
 ## ✨ Destaques
 
 - 🧠 **CPU SM83 M-cycle-accurate** — o sistema avança a cada acesso de memória, como o hardware.

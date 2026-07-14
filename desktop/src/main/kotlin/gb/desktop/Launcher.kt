@@ -52,7 +52,9 @@ class LauncherPanel(
     init {
         background = BG
         add(header(), BorderLayout.NORTH)
-        val scroll = JScrollPane(grid).apply {
+        // wrapper impede o GridLayout de esticar os cards quando há poucas ROMs
+        val gridWrapper = JPanel(BorderLayout()).apply { background = BG; add(grid, BorderLayout.NORTH) }
+        val scroll = JScrollPane(gridWrapper).apply {
             border = null; background = BG; viewport.background = BG
             verticalScrollBar.unitIncrement = 24
         }
