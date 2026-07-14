@@ -85,7 +85,7 @@ git add -p
 git commit -m "feat(core): descricao curta do que mudou"
 #              ^tipo ^escopo
 # tipos: feat · fix · docs · test · chore · refactor
-# escopos comuns: core · desktop · cli · android
+# escopos comuns: core · desktop · cli · api
 ```
 
 ### 5 — Push para o SEU fork
@@ -143,17 +143,17 @@ git push origin main
 | Emulação (CPU, PPU, APU, MBC, timer…) | `:core` — Kotlin puro, testável na JVM |
 | App de jogar (janela, menus, input, áudio) | `:desktop` |
 | Runner de terminal (trace, screenshot) | `:cli` |
-| App Android (experimental) | `android/` (requer SDK; fora do build padrão) |
+| Contrato multi-sistema (`EmulatorCore`) | `:api` — implementar isto = console novo |
 
 <sub>Para entender o desenho geral antes de mexer: **[CONSTRUCAO.md](CONSTRUCAO.md)**.</sub>
 
 ## 💡 Ideias de contribuição
 
 - 🎯 Bits-exatos do MBC1 · write-window do TIMA (fecha os mooneye restantes)
-- ⚡ Otimização dos hot loops (FIFO/APU sem alocação) — importante para o Android
+- 🎮 **Core NES** — o próximo console (6502 validada pelo `nestest.log`, PPU, mappers)
+- ⚡ Otimização dos hot loops (FIFO/APU sem alocação)
 - 🕹️ MBC1 multicart · HuC1 · boot ROM opcional
 - 💾 Rewind · cheat scanner · TAS tools
-- 📱 Release Android
 
 ---
 

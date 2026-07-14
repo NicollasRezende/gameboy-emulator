@@ -6,6 +6,7 @@ plugins {
 repositories { mavenCentral() }
 
 dependencies {
+    implementation(project(":api"))
     implementation(project(":core"))
     implementation("net.java.jinput:jinput:2.0.10") // gamepad (best-effort, degrada se indisponível)
 }

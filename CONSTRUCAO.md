@@ -216,9 +216,10 @@ ficar fora do snapshot, os caminhos divergem e o teste acusa. Determinismo vira 
 - **Golden tests pagam o custo.** Comparar 23.040 pixels parece bruto, mas aponta o
   primeiro pixel divergente — que localiza o bug (prioridade? paleta? scroll?) melhor
   que qualquer log.
-- **A fronteira certa faz o resto ser fácil.** O core não conhece Swing, Android ou
+- **A fronteira certa faz o resto ser fácil.** O core não conhece Swing nem
   arquivo — recebe bytes, devolve framebuffer/amostras. Por isso o mesmo núcleo roda em
-  CLI, desktop e (futuramente) Android sem tocar em uma linha da emulação.
+  CLI e desktop sem tocar em uma linha da emulação — e é a mesma fronteira
+  (a interface `EmulatorCore`) que abre a porta para os próximos consoles.
 - **Nome de teste em Kotlin não pode ter `:`** — e um teste que não compila parece um
   teste que passou, se você olhar só o cache. (`--rerun-tasks` é seu amigo.)
 

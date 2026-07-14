@@ -1,5 +1,6 @@
 package gb.desktop
 
+import emu.SystemDef
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Cursor
@@ -28,8 +29,13 @@ private val CARD = Color(0x22, 0x26, 0x2A)
 private val CARD_HOVER = Color(0x2E, 0x8B, 0x57)
 private val TEXT = Color(0xE6, 0xE6, 0xE6)
 private val ACCENT = Color(0x8B, 0xC3, 0x4A)
+private val TAB_ON = Color(0x8B, 0xC3, 0x4A)
+private val TAB_OFF = Color(0x22, 0x26, 0x2A)
 
-/** Tela inicial: biblioteca de ROMs com busca, cards (título + DMG/GBC) e escolha de pasta. */
+/**
+ * Tela inicial: seletor de sistema + biblioteca de ROMs com busca e cards.
+ * Cada sistema registrado em [Systems] vira uma aba; a biblioteca filtra por ele.
+ */
 class LauncherPanel(
     private val prefs: Preferences,
     private val onPlay: (File) -> Unit,
@@ -37,9 +43,11 @@ class LauncherPanel(
 
     private val grid = JPanel(GridLayout(0, 3, 12, 12)).apply { background = BG; border = BorderFactory.createEmptyBorder(16, 16, 16, 16) }
     private val search = JTextField()
+    private val tabsRow = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply { background = BG }
     private var entries: List<RomEntry> = emptyList()
+    private var selectedSystem: String = prefs.get("system", "all") // "all" ou SystemDef.id
 
-    private data class RomEntry(val file: File, val title: String, val kind: String, val recent: Boolean)
+    private data class RomEntry(val file: File, val title: String, val badge: String, val system: SystemDef?, val recent: Boolean)
 
     init {
         background = BG
@@ -55,9 +63,15 @@ class LauncherPanel(
     private fun header(): JPanel {
         val top = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS); background = BG; border = BorderFactory.createEmptyBorder(20, 20, 4, 20) }
 
-        val title = JLabel("GB Emulator").apply { foreground = ACCENT; font = Font("SansSerif", Font.BOLD, 26); alignmentX = LEFT_ALIGNMENT }
-        val sub = JLabel("Selecione um jogo para começar").apply { foreground = Color(0x9A, 0x9A, 0x9A); font = Font("SansSerif", Font.PLAIN, 13); alignmentX = LEFT_ALIGNMENT }
-        top.add(title); top.add(sub); top.add(Box.createVerticalStrut(14))
+        val title = JLabel("Emulator").apply { foreground = ACCENT; font = Font("SansSerif", Font.BOLD, 26); alignmentX = LEFT_ALIGNMENT }
+        val sub = JLabel("Escolha o sistema e o jogo").apply { foreground = Color(0x9A, 0x9A, 0x9A); font = Font("SansSerif", Font.PLAIN, 13); alignmentX = LEFT_ALIGNMENT }
+        top.add(title); top.add(sub); top.add(Box.createVerticalStrut(12))
+
+        // abas de sistema
+        tabsRow.alignmentX = LEFT_ALIGNMENT
+        tabsRow.maximumSize = Dimension(Int.MAX_VALUE, 36)
+        rebuildTabs()
+        top.add(tabsRow); top.add(Box.createVerticalStrut(10))
 
         val controls = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply { background = BG; alignmentX = LEFT_ALIGNMENT; maximumSize = Dimension(Int.MAX_VALUE, 40) }
         search.apply {
@@ -69,12 +83,32 @@ class LauncherPanel(
                 override fun changedUpdate(e: DocumentEvent) = render()
             })
         }
-        val browse = darkButton("📁  Escolher pasta de ROMs…") { chooseFolder() }
-        val openOne = darkButton("Abrir ROM avulsa…") { chooseFile() }
         controls.add(JLabel("🔎").apply { foreground = TEXT })
-        controls.add(search); controls.add(browse); controls.add(openOne)
+        controls.add(search)
+        controls.add(darkButton("📁  Escolher pasta de ROMs…") { chooseFolder() })
+        controls.add(darkButton("Abrir ROM avulsa…") { chooseFile() })
         top.add(controls)
         return top
+    }
+
+    private fun rebuildTabs() {
+        tabsRow.removeAll()
+        tabsRow.add(tabButton("Todos", "all"))
+        Systems.all.forEach { sys -> tabsRow.add(tabButton(sys.name, sys.id)) }
+        tabsRow.revalidate(); tabsRow.repaint()
+    }
+
+    private fun tabButton(label: String, id: String) = JButton(label).apply {
+        val active = selectedSystem == id
+        background = if (active) TAB_ON else TAB_OFF
+        foreground = if (active) Color(0x14, 0x16, 0x18) else TEXT
+        isFocusPainted = false
+        border = BorderFactory.createEmptyBorder(6, 14, 6, 14)
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        addActionListener {
+            selectedSystem = id; prefs.put("system", id)
+            rebuildTabs(); render()
+        }
     }
 
     private fun darkButton(text: String, onClick: () -> Unit) = JButton(text).apply {
@@ -100,24 +134,36 @@ class LauncherPanel(
     /** Reescaneia a pasta + recentes e redesenha. */
     fun refresh() {
         val found = LinkedHashMap<String, RomEntry>()
-        // recentes primeiro
         prefs.get("recent", "").split("\n").filter { it.isNotBlank() }.map { File(it) }.filter { it.exists() }.forEach {
-            val (t, k) = header(it); found[it.absolutePath] = RomEntry(it, t, k, true)
+            found[it.absolutePath] = entryFor(it, recent = true)
         }
-        // pasta de ROMs
         prefs.get("romDir", "").takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.isDirectory }?.listFiles { f ->
-            f.extension.lowercase() in listOf("gb", "gbc")
+            f.extension.lowercase() in Systems.allExtensions
         }?.sortedBy { it.name }?.forEach {
-            if (!found.containsKey(it.absolutePath)) { val (t, k) = header(it); found[it.absolutePath] = RomEntry(it, t, k, false) }
+            if (!found.containsKey(it.absolutePath)) found[it.absolutePath] = entryFor(it, recent = false)
         }
         entries = found.values.toList()
         render()
     }
 
+    private fun entryFor(f: File, recent: Boolean): RomEntry {
+        val sys = Systems.forFile(f)
+        return when (sys?.id) {
+            "gb" -> {
+                val (title, kind) = gbHeader(f)
+                RomEntry(f, title, if (kind == "GBC") "🌈 GBC" else "DMG", sys, recent)
+            }
+            else -> RomEntry(f, f.nameWithoutExtension, sys?.name ?: "?", sys, recent)
+        }
+    }
+
     private fun render() {
         grid.removeAll()
         val q = search.text.trim().lowercase()
-        val list = entries.filter { q.isBlank() || it.title.lowercase().contains(q) || it.file.name.lowercase().contains(q) }
+        val list = entries.filter { e ->
+            (selectedSystem == "all" || e.system?.id == selectedSystem) &&
+                (q.isBlank() || e.title.lowercase().contains(q) || e.file.name.lowercase().contains(q))
+        }
         if (list.isEmpty()) {
             grid.add(JLabel("Nenhuma ROM. Use \"Escolher pasta de ROMs…\" ou \"Abrir ROM avulsa…\".", SwingConstants.CENTER).apply { foreground = Color(0x9A, 0x9A, 0x9A) })
         } else {
@@ -127,9 +173,8 @@ class LauncherPanel(
     }
 
     private fun card(e: RomEntry): JButton {
-        val badge = if (e.kind == "GBC") "🌈 GBC" else "DMG"
         val recent = if (e.recent) " · recente" else ""
-        return JButton("<html><div style='text-align:center;width:150px'><b>${e.title}</b><br><span style='color:#8BC34A'>$badge</span>$recent<br><small style='color:#888'>${e.file.name}</small></div></html>").apply {
+        return JButton("<html><div style='text-align:center;width:150px'><b>${e.title}</b><br><span style='color:#8BC34A'>${e.badge}</span>$recent<br><small style='color:#888'>${e.file.name}</small></div></html>").apply {
             background = CARD; foreground = TEXT; isFocusPainted = false
             preferredSize = Dimension(180, 90)
             border = BorderFactory.createLineBorder(Color(0x33, 0x38, 0x3D), 1, true)
@@ -142,8 +187,8 @@ class LauncherPanel(
         }
     }
 
-    /** Lê o cabeçalho do cartucho: (título, DMG/GBC). */
-    private fun header(f: File): Pair<String, String> = try {
+    /** Lê o cabeçalho de um cartucho Game Boy: (título, DMG/GBC). */
+    private fun gbHeader(f: File): Pair<String, String> = try {
         val buf = ByteArray(0x150)
         RandomAccessFile(f, "r").use { it.readFully(buf) }
         val title = (0x134..0x142).map { buf[it].toInt() and 0xFF }.takeWhile { it != 0 }.map { it.toChar() }.joinToString("").trim()

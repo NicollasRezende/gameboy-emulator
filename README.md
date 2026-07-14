@@ -105,10 +105,10 @@ GameBoy (scheduler: CPU → PPU/APU/timer a cada M-cycle)
 ├── Memory (mapa de endereços, HDMA, WRAM banking)
 └── Cartridge → Mbc (RomOnly · MBC1 · MBC2 · MBC3+RTC · MBC5) + Cheats
 
+:api      interface EmulatorCore — o contrato que qualquer console implementa
 :cli      runner (serial, trace, screenshot, save, paleta)
-:desktop  app Swing jogável (biblioteca, áudio, gamepad, save states…)
+:desktop  app multi-sistema (seletor de console, biblioteca, áudio, gamepad, save states…)
 homebrew/ CINZA — ROM autoral + artigo técnico
-android/  app Jetpack Compose (requer Android SDK)
 ```
 
 ## 🚀 Rodando
@@ -133,7 +133,7 @@ ROM autoral, livre, pronta para jogar.
 
 ## 🎛️ Recursos do app desktop
 
-- **Biblioteca** com busca, cards (título + badge DMG/🌈GBC) e ROMs recentes.
+- **Biblioteca multi-sistema**: abas por console, busca, cards (título + badge DMG/🌈GBC) e ROMs recentes.
 - **Emulação**: pausar, velocidade 0.25×–8×, turbo (<kbd>TAB</kbd>), **save states** em 4 slots (<kbd>F1</kbd>–<kbd>F4</kbd> / <kbd>F5</kbd>–<kbd>F8</kbd>), remapear teclas.
 - **Vídeo**: escala 2×–6×, tela cheia (<kbd>F11</kbd>), overlay de FPS, 8 paletas para jogos DMG.
   Filtros (scanlines / LCD grid / ghosting) e correção de cor CGB existem como opção — **desligados por padrão**: a imagem nasce fiel ao que o jogo define.
@@ -149,7 +149,11 @@ ROM autoral, livre, pronta para jogar.
 - [x] MBC1/2/3(+RTC)/5 · save de bateria · save states
 - [x] APU (som) · app desktop · atalho clicável
 - [x] **CINZA** — ROM homebrew autoral rodando no emulador
-- [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1 · Android release
+- [x] **Arquitetura multi-sistema** — interface `EmulatorCore` + seletor de console na biblioteca
+- [ ] **NES** — o próximo console da escada (CPU 6502 validada pelo `nestest`, PPU, mappers)
+- [ ] **SNES** — depois do NES (65C816 + SPC700)
+- [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
+- [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 
 ## ⚖️ Legal
 
