@@ -156,7 +156,7 @@ ROM autoral, livre, pronta para jogar.
 
 - **Biblioteca multi-sistema**: abas por console, busca, cards (título + badge DMG/🌈GBC) e ROMs recentes.
 - **Emulação**: pausar, velocidade 0.25×–8×, turbo (<kbd>TAB</kbd>), **save states** em 4 slots (<kbd>F1</kbd>–<kbd>F4</kbd> / <kbd>F5</kbd>–<kbd>F8</kbd>).
-- **Controles** (menu *Emulação → Configurar controles*): abas **Teclado** e **Controle**, ambos remapeáveis no modo "pressione para aprender" e salvos automaticamente. Suporte a gamepad (padrão Xbox por default) via JInput.
+- **Controles** (menu *Emulação → Configurar controles*): abas **Teclado** e **Controle**, ambos remapeáveis no modo "pressione para aprender" e salvos automaticamente. No Linux o gamepad é lido direto de `/dev/input/js*` (sem bibliotecas nativas), com **hotplug** e defaults prontos para controle padrão Xbox.
 - **Vídeo**: escala 2×–6×, tela cheia (<kbd>F11</kbd>), overlay de FPS, 8 paletas para jogos DMG.
   Filtros (scanlines / LCD grid / ghosting) e correção de cor CGB existem como opção — **desligados por padrão**: a imagem nasce fiel ao que o jogo define.
 - **Áudio**: mudo, volume, liga/desliga cada canal.

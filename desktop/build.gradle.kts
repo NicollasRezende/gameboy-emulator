@@ -9,7 +9,6 @@ dependencies {
     implementation(project(":api"))
     implementation(project(":core"))
     implementation(project(":nes"))
-    implementation("net.java.jinput:jinput:2.0.10") // gamepad (best-effort, degrada se indisponível)
 }
 
 application {
