@@ -95,6 +95,7 @@ class EmulatorWindow : JFrame() {
     private var flashMsg = ""
     private var keyCapture: ((Int) -> Unit)? = null
     private val keymap: MutableMap<Int, Button> = loadKeymap()
+    private lateinit var gamepad: GamepadManager
 
     private var img = BufferedImage(160, 144, BufferedImage.TYPE_INT_RGB)
     private lateinit var pauseItem: JCheckBoxMenuItem
@@ -146,7 +147,8 @@ class EmulatorWindow : JFrame() {
         setupAudio()
         setupKeys()
         setupDragAndDrop()
-        GamepadPoller { b, pressed -> if (inGame) core?.setButton(b, pressed) }.start()
+        gamepad = GamepadManager(prefs) { b, pressed -> if (inGame) core?.setButton(b, pressed) }
+        gamepad.start()
         cards.show(root, "launcher")
         Timer(16) { tick() }.start()
     }
@@ -299,7 +301,7 @@ class EmulatorWindow : JFrame() {
         val loadMenu = JMenu("Carregar estado")
         (1..4).forEach { s -> loadMenu.add(JMenuItem("Slot $s (F${s + 4})").also { it.addActionListener { loadStateSlot(s) } }) }
         emu.add(loadMenu)
-        emu.add(JMenuItem("Configurar teclas…").also { it.addActionListener { keyConfigDialog() } })
+        emu.add(JMenuItem("Configurar controles…").also { it.addActionListener { inputConfigDialog() } })
         emu.add(JMenuItem("Cheats…").also { it.addActionListener { cheatsDialog() } })
         emu.add(JCheckBoxMenuItem("Continuar automaticamente (save-state)", autosave).also { it.addActionListener { m -> autosave = (m.source as JCheckBoxMenuItem).isSelected; prefs.putBoolean("autosave", autosave) } })
         bar.add(emu)
@@ -469,27 +471,20 @@ class EmulatorWindow : JFrame() {
         }
     }
 
-    private fun keyConfigDialog() {
-        val dlg = JDialog(this, "Configurar teclas", true)
-        val panel = JPanel().also { it.layout = BoxLayout(it, BoxLayout.Y_AXIS); it.border = javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12) }
-        panel.add(JLabel("Clique em um botão e pressione a tecla (Esc cancela)"))
-        panel.add(Box.createVerticalStrut(8))
-        Button.entries.forEach { b ->
-            val current = keymap.entries.firstOrNull { it.value == b }?.key ?: -1
-            val btn = JButton("$b  →  ${KeyEvent.getKeyText(current)}")
-            btn.addActionListener {
-                btn.text = "$b  →  <pressione…>"
-                keyCapture = { code ->
-                    keymap.entries.removeAll { it.value == b }
-                    keymap[code] = b; prefs.putInt("key_$b", code)
-                    btn.text = "$b  →  ${KeyEvent.getKeyText(code)}"; keyCapture = null
-                }
-            }
-            btn.alignmentX = LEFT_ALIGNMENT
-            panel.add(btn); panel.add(Box.createVerticalStrut(4))
-        }
-        dlg.contentPane = panel; dlg.pack(); dlg.setLocationRelativeTo(this); dlg.isVisible = true
-        keyCapture = null
+    /** Aguarda o próximo KEY_PRESSED (Esc cancela) e o entrega ao callback, limpando-se depois. */
+    private fun captureKey(onDone: (Int) -> Unit) { keyCapture = { code -> keyCapture = null; onDone(code) } }
+
+    private fun inputConfigDialog() {
+        keyCapture = null; gamepad.cancelCapture()
+        InputConfigDialog(
+            parent = this,
+            prefs = prefs,
+            keymap = keymap,
+            defaultKeymap = defaultKeymap(),
+            captureKey = { onDone -> captureKey(onDone) },
+            cancelKeyCapture = { keyCapture = null },
+            gamepad = gamepad,
+        ).isVisible = true
     }
 
     private fun setupDragAndDrop() {
