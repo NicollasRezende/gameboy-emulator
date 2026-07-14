@@ -73,10 +73,14 @@ class GamepadManager(
     fun start() {
         Thread {
             try {
-                val env = ControllerEnvironment.getDefaultEnvironment()
+                var controllers = scanControllers()
+                var tick = 1
                 while (!Thread.currentThread().isInterrupted) {
-                    if (!enabled && capture == null) { Thread.sleep(80); continue }
-                    val active = collectActive(env)
+                    // JInput só enumera na criação do ambiente; enquanto não houver controle,
+                    // re-escaneamos ~a cada 1s para detectar um que seja conectado depois (hotplug).
+                    if (detectedName == null && tick % 60 == 0) controllers = scanControllers()
+                    tick++
+                    val active = collectActive(controllers)
                     val cb = capture
                     if (cb != null) {
                         val fresh = active - prevActive
@@ -93,11 +97,28 @@ class GamepadManager(
         }.apply { isDaemon = true; start() }
     }
 
+    /**
+     * Recria o ControllerEnvironment para reenumerar os dispositivos (o padrão do JInput é
+     * um singleton que só varre uma vez, ignorando controles conectados depois). A classe
+     * concreta é package-private, daí a reflexão; cai no singleton se algo falhar.
+     */
+    private fun scanControllers(): Array<Controller> = try {
+        val env = try {
+            val cls = Class.forName("net.java.games.input.DefaultControllerEnvironment")
+            cls.getDeclaredConstructor().apply { isAccessible = true }.newInstance() as ControllerEnvironment
+        } catch (t: Throwable) {
+            ControllerEnvironment.getDefaultEnvironment()
+        }
+        env.controllers
+    } catch (t: Throwable) {
+        emptyArray()
+    }
+
     /** Varre os controles e devolve os tokens físicos ativos neste instante. */
-    private fun collectActive(env: ControllerEnvironment): Set<String> {
+    private fun collectActive(controllers: Array<Controller>): Set<String> {
         val active = HashSet<String>()
         var name: String? = null
-        for (c in env.controllers) {
+        for (c in controllers) {
             if (c.type != Controller.Type.GAMEPAD && c.type != Controller.Type.STICK) continue
             if (!c.poll()) continue
             name = c.name
