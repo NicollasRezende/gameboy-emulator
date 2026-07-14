@@ -67,10 +67,12 @@ o método, os bugs e as lições — na ordem em que aconteceram</sub>
 
 <div align="center">
 
-<img src="screenshots/nes-zelda.png" width="640" alt="The Legend of Zelda rodando no core NES">
+<img src="screenshots/nes-zelda.png" width="420" alt="The Legend of Zelda rodando no core NES"> <img src="screenshots/nes-megaman3.png" width="420" alt="Mega Man 3 rodando no core NES">
 
-<sub><b>The Legend of Zelda</b> (NES, mapper MMC1) rodando no app desktop — CPU 6502, PPU com
-scroll/sprites e o mapper, todos validados por teste antes de encostar num jogo.</sub>
+<sub><b>The Legend of Zelda</b> (MMC1) e <b>Mega Man 3</b> (MMC3) rodando no app desktop. O
+gradiente do céu do Mega Man 3 é um efeito por scanline dirigido pelo <b>IRQ do MMC3</b> —
+prova visual de que o mapper e a interrupção de scanline funcionam num jogo comercial de
+verdade (o filtro de scanlines está ligado na captura).</sub>
 
 <br><br>
 
