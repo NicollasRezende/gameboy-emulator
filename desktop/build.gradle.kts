@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":api"))
     implementation(project(":core"))
     implementation(project(":nes"))
+    implementation(project(":snes"))
 }
 
 application {

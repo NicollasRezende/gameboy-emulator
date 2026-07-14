@@ -3,6 +3,7 @@ package gb.desktop
 import emu.SystemDef
 import gb.GbCore
 import nes.NesCore
+import snes.SnesCore
 import java.io.File
 
 /**
@@ -27,7 +28,14 @@ object Systems {
             height = 240,
             createCore = { rom, save -> NesCore(rom, save) },
         ),
-        // Próximos degraus da escada (roadmap): SNES → ...
+        SystemDef(
+            id = "snes",
+            name = "SNES (beta, sem áudio)",
+            extensions = listOf("sfc", "smc"),
+            width = 256,
+            height = 224,
+            createCore = { rom, save -> SnesCore(rom, save) },
+        ),
     )
 
     fun forFile(f: File): SystemDef? = all.firstOrNull { f.extension.lowercase() in it.extensions }

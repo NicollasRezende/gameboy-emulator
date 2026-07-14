@@ -65,7 +65,11 @@ fun main(args: Array<String>) {
             val b = File(savePath).readBytes(); IntArray(b.size) { b[it].toInt() and 0xFF }
         } else null
 
-        val core: EmulatorCore = if (path.lowercase().endsWith(".nes")) NesCore(rom, save) else GbCore(rom, save)
+        val core: EmulatorCore = when {
+            path.lowercase().endsWith(".nes") -> NesCore(rom, save)
+            path.lowercase().endsWith(".sfc") || path.lowercase().endsWith(".smc") -> snes.SnesCore(rom, save)
+            else -> GbCore(rom, save)
+        }
         val paletteName = args.indexOf("--palette").let { if (it >= 0 && it + 1 < args.size) args[it + 1] else null }
         if (paletteName != null) (core as? GbCore)?.gameBoy?.ppu?.dmgPalette = DmgPalettes.byName(paletteName)
 

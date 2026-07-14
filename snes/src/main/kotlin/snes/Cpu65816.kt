@@ -238,6 +238,19 @@ class Cpu65816(private val bus: Bus65816) {
         pc = bus.read(0xFFFC) or (bus.read(0xFFFD) shl 8)
     }
 
+    fun saveState(o: java.io.DataOutputStream) {
+        o.writeInt(a); o.writeInt(x); o.writeInt(y); o.writeInt(s); o.writeInt(d)
+        o.writeInt(pc); o.writeInt(pbr); o.writeInt(dbr); o.writeInt(p); o.writeBoolean(e)
+        o.writeLong(cycles); o.writeBoolean(stopped); o.writeBoolean(waiting)
+        o.writeBoolean(irqLine); o.writeBoolean(nmiPending)
+    }
+    fun loadState(i: java.io.DataInputStream) {
+        a = i.readInt(); x = i.readInt(); y = i.readInt(); s = i.readInt(); d = i.readInt()
+        pc = i.readInt(); pbr = i.readInt(); dbr = i.readInt(); p = i.readInt(); e = i.readBoolean()
+        cycles = i.readLong(); stopped = i.readBoolean(); waiting = i.readBoolean()
+        irqLine = i.readBoolean(); nmiPending = i.readBoolean()
+    }
+
     /** Executa uma instrução; devolve os ciclos consumidos. */
     fun step(): Int {
         val start = cycles
