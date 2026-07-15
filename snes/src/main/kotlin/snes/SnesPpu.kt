@@ -107,12 +107,19 @@ class SnesPpu {
         if (forcedBlank) { for (x in 0 until 256) framebuffer[row + x] = 0xFF000000.toInt(); return }
         for (x in 0 until 256) { framebuffer[row + x] = backdrop; linePrio[x] = -1 }
 
-        // ordem de prioridade simplificada para modos 0/1: BG por trás, sprites por cima conforme prio
-        val bgCount = if (bgMode == 0) 4 else 3
-        val bgBpp = if (bgMode == 0) intArrayOf(2, 2, 2, 2) else intArrayOf(4, 4, 2, 0)
-        // desenha do fundo (BG3/BG2) para a frente (BG1); prioridade por camada
+        // profundidade de bits por BG conforme o modo de fundo (bits 0-2 de BGMODE).
+        // Modos 5/6 (hires) tratados como 4/2bpp; modo 7 (afim) ainda não renderizado.
+        val bgBpp = when (bgMode and 0x07) {
+            0 -> intArrayOf(2, 2, 2, 2)
+            1 -> intArrayOf(4, 4, 2, 0)
+            2 -> intArrayOf(4, 4, 0, 0) // offset-per-tile ignorado
+            3 -> intArrayOf(8, 4, 0, 0)
+            4 -> intArrayOf(8, 2, 0, 0) // offset-per-tile ignorado
+            5 -> intArrayOf(4, 2, 0, 0) // hires ignorado
+            else -> intArrayOf(0, 0, 0, 0)
+        }
+        // desenha do fundo (BG4/BG3/BG2) para a frente (BG1); prioridade por camada
         for (layer in intArrayOf(3, 2, 1, 0)) {
-            if (layer >= bgCount) continue
             if (mainScreen and (1 shl layer) == 0) continue
             if (bgBpp[layer] == 0) continue
             renderBg(y, row, layer, bgBpp[layer])
@@ -127,7 +134,7 @@ class SnesPpu {
         val widthTiles = if (bgSizeWide[bg]) 64 else 32
         val heightTiles = if (bgSizeBig[bg]) 64 else 32
         val fy = (y + vofs) and 0x7FF
-        val wordsPerTile = if (bpp == 2) 8 else 16
+        val wordsPerTile = when (bpp) { 2 -> 8; 4 -> 16; else -> 32 } // 8bpp = 32 words
 
         for (x in 0 until 256) {
             val fx = (x + hofs) and 0x7FF
@@ -145,7 +152,12 @@ class SnesPpu {
             if (flipX) px = 7 - px; if (flipY) py = 7 - py
             val ci = tilePixel(charBase + tileNum * wordsPerTile, px, py, bpp)
             if (ci != 0) {
-                val palBase = if (bpp == 2) pal * 4 else pal * 16
+                // 8bpp: índice direto no CGRAM (256 cores). Senão, sub-paleta pelo tamanho.
+                // No modo 0 cada BG usa um grupo próprio (BG1=0, BG2=32, BG3=64, BG4=96).
+                val palBase = when {
+                    bpp == 8 -> 0
+                    else -> (if (bgMode == 0) bg * 32 else 0) + (if (bpp == 2) pal * 4 else pal * 16)
+                }
                 framebuffer[row + x] = bgr555(cgram[(palBase + ci) and 0xFF])
             }
         }
@@ -154,13 +166,12 @@ class SnesPpu {
     /** Lê o índice de cor (0..2^bpp-1) de um pixel de tile planar na VRAM. */
     private fun tilePixel(charWord: Int, px: Int, py: Int, bpp: Int): Int {
         var ci = 0
-        val base = (charWord + py) and 0x7FFF
-        val p01 = vram[base]
         val bit = 7 - px
-        ci = ci or (((p01 shr bit) and 1)) or ((((p01 shr (8 + bit)) and 1)) shl 1)
-        if (bpp >= 4) {
-            val p23 = vram[(charWord + 8 + py) and 0x7FFF]
-            ci = ci or ((((p23 shr bit) and 1)) shl 2) or ((((p23 shr (8 + bit)) and 1)) shl 3)
+        // cada palavra guarda 2 bitplanes (byte baixo = par, byte alto = ímpar); 8bpp usa 4 pares
+        val pairs = bpp / 2
+        for (p in 0 until pairs) {
+            val w = vram[(charWord + p * 8 + py) and 0x7FFF]
+            ci = ci or (((w shr bit) and 1) shl (p * 2)) or ((((w shr (8 + bit)) and 1)) shl (p * 2 + 1))
         }
         return ci
     }

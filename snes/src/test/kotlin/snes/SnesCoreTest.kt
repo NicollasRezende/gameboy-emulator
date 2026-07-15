@@ -11,19 +11,26 @@ import org.junit.jupiter.api.Test
  * save state. Prova a cadeia CPU 65C816 → DMA → VRAM → PPU → pixels.
  */
 class SnesCoreTest {
-    private fun loadRom(): IntArray {
-        val stream = javaClass.getResourceAsStream("/roms/bgmap4bpp.sfc")
-        assumeTrue(stream != null, "ROM de teste SNES ausente")
+    private fun loadRom(name: String = "bgmap4bpp"): IntArray {
+        val stream = javaClass.getResourceAsStream("/roms/$name.sfc")
+        assumeTrue(stream != null, "ROM de teste SNES ausente: $name")
         val bytes = stream!!.readBytes()
         return IntArray(bytes.size) { bytes[it].toInt() and 0xFF }
     }
 
-    @Test fun `boota e renderiza um background carregado por DMA`() {
-        val core = SnesCore(loadRom())
-        repeat(20) { core.runFrame() }
-        // a imagem de teste preenche a tela com muitas cores — não pode ser uma cor só
-        val colors = core.framebuffer.toSet()
-        assertTrue(colors.size > 50, "framebuffer com poucas cores (${colors.size}) — a PPU não renderizou o BG")
+    /**
+     * Cada ROM (PeterLemon/SNES, domínio público) carrega uma imagem via DMA e a mostra num
+     * modo/camada de fundo específico. Cobre modo 1 (4bpp), modo 0 nas camadas BG1 e BG3
+     * (a BG3 pegou o bug do grupo de paleta do modo 0) e o modo 3 (8bpp, 256 cores).
+     */
+    @Test fun `renderiza backgrounds em varios modos e camadas`() {
+        for (rom in listOf("bgmap4bpp", "bg1map2bpp", "bg3map2bpp", "bgmap8bpp")) {
+            val core = SnesCore(loadRom(rom))
+            repeat(20) { core.runFrame() }
+            val colors = core.framebuffer.toSet().size
+            // 2bpp rende ~24 cores; 4/8bpp bem mais. Preto/single-band (o bug do BG3) dava 1.
+            assertTrue(colors > 10, "$rom: framebuffer com poucas cores ($colors) — PPU não renderizou o BG")
+        }
     }
 
     @Test fun `save state reproduz a execucao (determinismo)`() {

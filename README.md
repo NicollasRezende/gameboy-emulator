@@ -82,11 +82,11 @@ verdade (o filtro de scanlines está ligado na captura).</sub>
 
 <br><br>
 
-<img src="screenshots/snes-bg-test.png" width="420" alt="SNES renderizando um background 4bpp">
+<img src="screenshots/snes-bg-test.png" width="420" alt="SNES renderizando um background 4bpp"> <img src="screenshots/snes-8bpp.png" width="420" alt="SNES renderizando um background 8bpp">
 
-<sub><b>SNES (beta)</b> renderizando uma imagem carregada por DMA num background 4bpp — a cadeia
-<b>CPU 65C816 → DMA → VRAM → PPU</b> funcionando de ponta a ponta. Áudio (SPC700+DSP) é o
-próximo milestone.</sub>
+<sub><b>SNES (beta)</b> — backgrounds carregados por DMA e renderizados pela PPU: à esquerda um
+BG 4bpp (modo 1), à direita um BG <b>8bpp</b> (modo 3, 256 cores), ambos pixel-a-pixel contra as
+ROMs de teste do PeterLemon. A cadeia <b>CPU 65C816 → DMA → VRAM → PPU</b> de ponta a ponta.</sub>
 
 </div>
 
@@ -195,8 +195,9 @@ ROM autoral, livre, pronta para jogar.
   - [x] **CPU 65C816** — validada contra os ProcessorTests (254 opcodes em modo emulação, ~2,5 mi de vetores estado-a-estado)
   - [x] **Sistema bootável** — mapa de memória (LoROM/HiROM), DMA/HDMA, PPU (backgrounds modo 0-1, sprites), interrupções, controle; **roda ROMs de teste e renderiza backgrounds**
   - [x] **CPU SPC700** — o processador de som, validada contra os ProcessorTests (256 opcodes) + IPL boot ROM e handshake real das portas (jogos comerciais fazem o upload do driver de som e passam do boot do APU)
-  - [ ] **DSP** (síntese de áudio) + timers exatos — o que falta para jogos como o Super Mario World completarem o boot e tocarem som
-  - [ ] PPU modos 2–7 (incl. Mode 7 afim), color math, janelas
+  - [x] **PPU modos 0–4** (2/4/8bpp, camadas BG1–4, grupos de paleta do modo 0) — validada contra as ROMs de teste do PeterLemon
+  - [ ] **DSP** (síntese de áudio) + timing ciclo-a-ciclo — o que falta para jogos como o Super Mario World completarem o boot e tocarem som
+  - [ ] PPU modo 7 (afim), color math, janelas, sprites com prioridade completa
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 
