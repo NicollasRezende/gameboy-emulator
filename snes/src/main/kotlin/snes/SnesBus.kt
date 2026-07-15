@@ -14,6 +14,10 @@ class SnesBus(
     val wram = IntArray(0x20000)
     lateinit var dma: SnesDma
 
+    /** Traz o SPC700 até o ciclo atual — chamado antes de cada acesso às portas do APU
+     *  (sincronismo fino, essencial para o handshake do driver de som não dessincronizar). */
+    var syncApu: () -> Unit = {}
+
     // registradores da CPU
     var nmitimen = 0
     var nmiFlag = false
@@ -26,6 +30,13 @@ class SnesBus(
     private var joy1 = 0
     // porta WRAM
     private var wramPort = 0
+
+    // diagnóstico: histograma de leituras de registradores (achar loops de polling)
+    val regReadHist = LongArray(0x10000)
+
+    fun topRegReads(n: Int): String = regReadHist.withIndex().filter { it.value > 0 }
+        .sortedByDescending { it.value }.take(n)
+        .joinToString(" ") { "$%04X=%d".format(it.index, it.value) }
 
     fun latchJoypad() { if (nmitimen and 1 != 0) joy1 = input.state() }
 
@@ -57,8 +68,9 @@ class SnesBus(
     }
 
     // ---------- B-bus ($2100-$21FF): PPU, APU, porta WRAM ----------
-    fun regReadB(a: Int): Int = when {
-        a in 0x2140..0x217F -> apu.readPort(a and 3)
+    fun regReadB(a: Int): Int { regReadHist[a]++; return regReadB0(a) }
+    private fun regReadB0(a: Int): Int = when {
+        a in 0x2140..0x217F -> { syncApu(); apu.readPort(a and 3) }
         a == 0x2180 -> wram[wramPort and 0x1FFFF].also { wramPort = (wramPort + 1) and 0x1FFFF }
         a in 0x2100..0x213F -> ppu.readReg(a)
         else -> mdr
@@ -67,7 +79,7 @@ class SnesBus(
     fun regWriteB(a: Int, v: Int) {
         when {
             a in 0x2100..0x213F -> ppu.writeReg(a, v)
-            a in 0x2140..0x217F -> apu.writePort(a and 3, v)
+            a in 0x2140..0x217F -> { syncApu(); apu.writePort(a and 3, v) }
             a == 0x2180 -> { wram[wramPort and 0x1FFFF] = v; wramPort = (wramPort + 1) and 0x1FFFF }
             a == 0x2181 -> wramPort = (wramPort and 0x1FF00) or v
             a == 0x2182 -> wramPort = (wramPort and 0x100FF) or (v shl 8)
@@ -76,7 +88,8 @@ class SnesBus(
     }
 
     // ---------- registradores da CPU ($4200-$43FF) ----------
-    private fun regReadCpu(a: Int): Int = when {
+    private fun regReadCpu(a: Int): Int { regReadHist[a]++; return regReadCpu0(a) }
+    private fun regReadCpu0(a: Int): Int = when {
         a == 0x4210 -> (if (nmiFlag) 0x80 else 0).also { nmiFlag = false } or 0x02 // RDNMI (+versão 2)
         a == 0x4211 -> 0            // TIMEUP (IRQ de timer não implementado)
         a == 0x4212 -> (if (inVBlank) 0x80 else 0)                // HVBJOY

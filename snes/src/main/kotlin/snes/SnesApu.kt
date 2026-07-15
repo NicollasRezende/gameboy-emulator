@@ -28,6 +28,8 @@ class SnesApu : Bus700 {
 
     var reads = 0L; var writes = 0L
     private var acc = 0.0
+    val spcRegReads = LongArray(0x100) // diagnóstico: leituras de $00xx pelo SPC
+    var spcSteps = 0L; var t0Fires = 0L; var t0Resets = 0L
 
     val cpu = Spc700(this)
 
@@ -48,14 +50,19 @@ class SnesApu : Bus700 {
     fun readPort(port: Int): Int { reads++; return spcToMain[port and 3] }
     fun writePort(port: Int, value: Int) { writes++; mainToSpc[port and 3] = value and 0xFF }
 
-    fun debug() = "APU(SPC700): SPC-PC=%04X ports[main→spc]=[%02X %02X %02X %02X] [spc→main]=[%02X %02X %02X %02X] reads=%d"
-        .format(cpu.pc, mainToSpc[0], mainToSpc[1], mainToSpc[2], mainToSpc[3], spcToMain[0], spcToMain[1], spcToMain[2], spcToMain[3], reads)
+    fun debug(): String {
+        val top = spcRegReads.withIndex().filter { it.value > 0 }.sortedByDescending { it.value }.take(4)
+            .joinToString(" ") { "\$%02X=%d".format(it.index, it.value) }
+        val timers = "T0(en=%b tgt=%d cnt=%d div=%d out=%X) acc=%.1f steps=%d fires=%d resets=%d".format(timerEnabled[0], timerTarget[0], timerCounter[0], timerDiv[0], timerOut[0], acc, spcSteps, t0Fires, t0Resets)
+        return "APU(SPC700): PC=%04X spc-reads:[%s] %s ports[m→s]=[%02X %02X %02X %02X] [s→m]=[%02X %02X %02X %02X]"
+            .format(cpu.pc, top, timers, mainToSpc[0], mainToSpc[1], mainToSpc[2], mainToSpc[3], spcToMain[0], spcToMain[1], spcToMain[2], spcToMain[3])
+    }
 
     /** Avança o SPC700 proporcionalmente aos ciclos da CPU principal. */
     fun step(mainCycles: Int) {
         acc += mainCycles * SPC_PER_MAIN
         while (acc >= 1.0) {
-            val c = cpu.step()
+            val c = cpu.step(); spcSteps++
             acc -= c
             tickTimers(c)
         }
@@ -70,7 +77,7 @@ class SnesApu : Bus700 {
                 timerDiv[t] -= rate
                 timerCounter[t] = (timerCounter[t] + 1) and 0xFF
                 val target = if (timerTarget[t] == 0) 256 else timerTarget[t]
-                if (timerCounter[t] >= target) { timerCounter[t] = 0; timerOut[t] = (timerOut[t] + 1) and 0x0F }
+                if (timerCounter[t] >= target) { timerCounter[t] = 0; timerOut[t] = (timerOut[t] + 1) and 0x0F; if (t==0) t0Fires++ }
             }
         }
     }
@@ -93,7 +100,7 @@ class SnesApu : Bus700 {
         }
     }
 
-    private fun regRead(a: Int): Int = when (a) {
+    private fun regRead(a: Int): Int = when (a.also { spcRegReads[it and 0xFF]++ }) {
         0xF2 -> dspAddr
         0xF3 -> dsp[dspAddr and 0x7F]
         0xF4, 0xF5, 0xF6, 0xF7 -> mainToSpc[a - 0xF4]
@@ -109,7 +116,7 @@ class SnesApu : Bus700 {
                 if (v and 0x20 != 0) { mainToSpc[2] = 0; mainToSpc[3] = 0 } // limpa portas 2/3
                 for (t in 0..2) {
                     val en = v and (1 shl t) != 0
-                    if (en && !timerEnabled[t]) { timerCounter[t] = 0; timerOut[t] = 0; timerDiv[t] = 0 }
+                    if (en && !timerEnabled[t]) { timerCounter[t] = 0; timerOut[t] = 0; timerDiv[t] = 0; if (t==0) t0Resets++ }
                     timerEnabled[t] = en
                 }
             }
@@ -123,6 +130,7 @@ class SnesApu : Bus700 {
 
     internal fun saveState(o: java.io.DataOutputStream) {
         cpu.saveState(o)
+        o.writeDouble(acc)
         for (b in aram) o.writeByte(b); for (b in dsp) o.writeByte(b)
         o.writeInt(dspAddr); o.writeInt(control); o.writeBoolean(iplEnabled)
         for (p in mainToSpc) o.writeInt(p); for (p in spcToMain) o.writeInt(p)
@@ -130,6 +138,7 @@ class SnesApu : Bus700 {
     }
     internal fun loadState(i: java.io.DataInputStream) {
         cpu.loadState(i)
+        acc = i.readDouble()
         for (j in aram.indices) aram[j] = i.readUnsignedByte(); for (j in dsp.indices) dsp[j] = i.readUnsignedByte()
         dspAddr = i.readInt(); control = i.readInt(); iplEnabled = i.readBoolean()
         for (j in 0..3) mainToSpc[j] = i.readInt(); for (j in 0..3) spcToMain[j] = i.readInt()

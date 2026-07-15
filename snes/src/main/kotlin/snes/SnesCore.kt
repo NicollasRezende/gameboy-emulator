@@ -27,8 +27,15 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
             readB = { reg -> bus.regReadB(0x2100 or reg) },
             writeA = { addr, v -> bus.write(addr, v) },
         )
+        bus.syncApu = ::syncApu
         apu.reset()
         cpu.reset()
+    }
+
+    private var apuSyncedAt = 0L
+    private fun syncApu() {
+        val d = (cpu.cycles - apuSyncedAt).toInt()
+        if (d > 0) { apu.step(d); apuSyncedAt = cpu.cycles }
     }
 
     override val systemId = "snes"
@@ -41,9 +48,8 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
         bus.dma.initHdma()
         for (line in 0 until 262) {
             val target = cpu.cycles + CYCLES_PER_LINE
-            val before = cpu.cycles
             while (cpu.cycles < target && !cpu.stopped && !cpu.waiting) cpu.step()
-            apu.step((cpu.cycles - before).toInt()) // SPC700 anda junto com a CPU principal
+            syncApu() // mantém o SPC700 em dia a cada scanline (e nos acessos às portas)
             val enteredVBlank = ppu.stepScanline()
             if (ppu.scanline < 224) bus.dma.stepHdma()
             bus.inVBlank = ppu.scanline >= 225
@@ -58,8 +64,8 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     /** Diagnóstico do estado do console (usado pelo CLI para investigar boot). */
     fun debugInfo(): String {
         val mode = if (cpu.e) "emu" else "nat"
-        return "CPU: %02X:%04X modo=%s | %s | %s | nmitimen=%02X"
-            .format(cpu.pbr, cpu.pc, mode, ppu.debug(), apu.debug(), bus.nmitimen)
+        return "CPU: %02X:%04X modo=%s | %s | %s | nmitimen=%02X\n  top-reads: %s"
+            .format(cpu.pbr, cpu.pc, mode, ppu.debug(), apu.debug(), bus.nmitimen, bus.topRegReads(8))
     }
 
     override fun setButton(button: Button, pressed: Boolean) = input.setButton(button, pressed)
@@ -68,13 +74,14 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
 
     override fun saveState(): ByteArray {
         val bos = java.io.ByteArrayOutputStream(); val o = java.io.DataOutputStream(bos)
-        cpu.saveState(o); ppu.saveState(o); bus.saveState(o)
+        cpu.saveState(o); ppu.saveState(o); bus.saveState(o); apu.saveState(o)
         for (b in cart.sram) o.writeByte(b)
         o.flush(); return bos.toByteArray()
     }
     override fun loadState(data: ByteArray) {
         val i = java.io.DataInputStream(java.io.ByteArrayInputStream(data))
-        cpu.loadState(i); ppu.loadState(i); bus.loadState(i)
+        cpu.loadState(i); ppu.loadState(i); bus.loadState(i); apu.loadState(i)
         for (j in cart.sram.indices) cart.sram[j] = i.readUnsignedByte()
+        apuSyncedAt = cpu.cycles // evita catch-up espúrio do APU após restaurar
     }
 }
