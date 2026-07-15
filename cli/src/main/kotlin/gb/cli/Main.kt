@@ -29,14 +29,19 @@ fun main(args: Array<String>) {
     // O caminho pode conter espaços; junta tudo até a primeira flag "--".
     val firstFlag = args.indexOfFirst { it.startsWith("--") }
     val pathTokens = if (firstFlag >= 0) args.copyOfRange(0, firstFlag) else args
-    val path = pathTokens.joinToString(" ")
+    var path = pathTokens.joinToString(" ")
 
     fun flagInt(name: String, default: Long): Long {
         val i = args.indexOf(name)
         return if (i >= 0 && i + 1 < args.size) args[i + 1].toLong() else default
     }
 
-    val file = File(path)
+    // Gradle repassa o path com as barras de escape do shell literais; se não achar, desescapa.
+    var file = File(path)
+    if (!file.exists()) {
+        val unescaped = path.replace(Regex("""\\(.)"""), "$1")
+        if (File(unescaped).exists()) { file = File(unescaped); path = unescaped }
+    }
     if (!file.exists()) {
         println("ROM não encontrada: $path")
         return
