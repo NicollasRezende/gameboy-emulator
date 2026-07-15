@@ -100,10 +100,10 @@ como F-Zero e Mario Kart). Toda a cadeia <b>CPU 65C816 → DMA → VRAM → PPU<
   (scroll, sprites, sprite-0 hit), APU de 5 canais (incl. **DMC**), mappers NROM/MMC1/UNROM/CNROM/**MMC3**
   (com **IRQ de scanline** — o split de tela de SMB3, Mega Man e cia.).
 - 🟣 **SNES (beta)**: CPUs **65C816** e **SPC700** validadas contra os ProcessorTests, PPU
-  (backgrounds modo 0-1, sprites), DMA/HDMA e o **APU com SPC700 real** (IPL + handshake — jogos comerciais fazem o upload do driver de som). Falta o **DSP** (síntese de áudio) para o som e para jogos como o SMW completarem o boot.
+  (**modos 0–4 + Mode 7 afim**, 2/4/8bpp, sprites), DMA/HDMA e o **APU com SPC700 real** (IPL + handshake). Falta o **DSP** (síntese de áudio) para o som e para jogos como o SMW completarem o boot.
 - 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
-- ✅ **637 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
+- ✅ **638 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
 
 ## 🎯 Precisão
 
@@ -142,7 +142,7 @@ GameBoy (scheduler: CPU → PPU/APU/timer a cada M-cycle)
 
 :api      interface EmulatorCore — o contrato que qualquer console implementa
 :nes      NES — CPU 6502 (nestest), PPU scanline, APU, mappers 0–4 (MMC3+IRQ)
-:snes     SNES — CPUs 65C816 + SPC700 (ProcessorTests), PPU BG modo 0-1 + sprites, DMA/HDMA, APU c/ IPL (beta)
+:snes     SNES — CPUs 65C816 + SPC700 (ProcessorTests), PPU modos 0-4 + Mode 7, DMA/HDMA, APU c/ IPL (beta)
 :cli      runner (serial, trace, screenshot, save, paleta)
 :desktop  app multi-sistema (seletor de console, biblioteca, áudio, gamepad, save states…)
 homebrew/ CINZA — ROM autoral + artigo técnico
