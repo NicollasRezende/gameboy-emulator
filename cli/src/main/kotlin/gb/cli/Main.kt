@@ -76,6 +76,7 @@ fun main(args: Array<String>) {
         repeat(frames) { core.runFrame() }
         writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
         println("── PNG salvo em $outPath ($frames frames, escala 4x) ──")
+        (core as? snes.SnesCore)?.let { println("── Diagnóstico SNES: ${it.debugInfo()} ──") }
 
         if (savePath != null) {
             val snap = core.saveRam()

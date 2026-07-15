@@ -52,6 +52,13 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
         }
     }
 
+    /** Diagnóstico do estado do console (usado pelo CLI para investigar boot). */
+    fun debugInfo(): String {
+        val mode = if (cpu.e) "emu" else "nat"
+        return "CPU: %02X:%04X modo=%s | %s | %s | nmitimen=%02X"
+            .format(cpu.pbr, cpu.pc, mode, ppu.debug(), apu.debug(), bus.nmitimen)
+    }
+
     override fun setButton(button: Button, pressed: Boolean) = input.setButton(button, pressed)
     override fun drainAudio(): ShortArray = ShortArray(0) // sem áudio (APU real: próximo milestone)
     override fun saveRam(): IntArray? = if (cart.hasBattery && cart.sram.isNotEmpty()) cart.sram.copyOf() else null
