@@ -11,7 +11,7 @@ Os dois lados do cartucho, construídos aqui.
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
 ![JDK](https://img.shields.io/badge/JDK-21-orange?logo=openjdk&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-638%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-639%20passing-brightgreen)
 
 <br>
 
@@ -82,11 +82,11 @@ verdade (o filtro de scanlines está ligado na captura).</sub>
 
 <br><br>
 
-<img src="screenshots/snes-8bpp.png" width="340" alt="SNES background 8bpp"> <img src="screenshots/snes-mode7.png" width="340" alt="SNES Mode 7 (afim)">
+<img src="screenshots/snes-8bpp.png" width="270" alt="SNES background 8bpp"> <img src="screenshots/snes-mode7.png" width="270" alt="SNES Mode 7 (afim)"> <img src="screenshots/snes-colormath.png" width="270" alt="SNES color math (blend)">
 
-<sub><b>SNES (beta)</b> — a PPU renderizando contra as ROMs de teste do PeterLemon: à esquerda um
-BG <b>8bpp</b> (modo 3, 256 cores); à direita o <b>Mode 7</b> (transformação afim — a pista girada/escalada,
-como F-Zero e Mario Kart). Toda a cadeia <b>CPU 65C816 → DMA → VRAM → PPU</b> de ponta a ponta.</sub>
+<sub><b>SNES (beta)</b> — a PPU renderizando contra as ROMs de teste do PeterLemon: BG <b>8bpp</b>
+(modo 3, 256 cores); <b>Mode 7</b> (transformação afim — a pista girada, como F-Zero/Mario Kart);
+e <b>color math</b> (blend de duas camadas → gradiente de 3840 cores). Cadeia <b>CPU 65C816 → DMA → VRAM → PPU</b> completa.</sub>
 
 </div>
 
@@ -100,10 +100,10 @@ como F-Zero e Mario Kart). Toda a cadeia <b>CPU 65C816 → DMA → VRAM → PPU<
   (scroll, sprites, sprite-0 hit), APU de 5 canais (incl. **DMC**), mappers NROM/MMC1/UNROM/CNROM/**MMC3**
   (com **IRQ de scanline** — o split de tela de SMB3, Mega Man e cia.).
 - 🟣 **SNES (beta)**: CPUs **65C816** e **SPC700** validadas contra os ProcessorTests, PPU
-  (**modos 0–4 + Mode 7 afim**, 2/4/8bpp, sprites), DMA/HDMA e o **APU com SPC700 real** (IPL + handshake). Falta o **DSP** (síntese de áudio) para o som e para jogos como o SMW completarem o boot.
+  (**modos 0–4 + Mode 7 + color math**, 2/4/8bpp, sprites), DMA/HDMA e o **APU com SPC700 real** (IPL + handshake). Falta o **DSP** (síntese de áudio) para o som e para jogos como o SMW completarem o boot.
 - 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
-- ✅ **638 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
+- ✅ **639 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
 
 ## 🎯 Precisão
 
@@ -195,9 +195,9 @@ ROM autoral, livre, pronta para jogar.
   - [x] **CPU 65C816** — validada contra os ProcessorTests (254 opcodes em modo emulação, ~2,5 mi de vetores estado-a-estado)
   - [x] **Sistema bootável** — mapa de memória (LoROM/HiROM), DMA/HDMA, PPU (backgrounds modo 0-1, sprites), interrupções, controle; **roda ROMs de teste e renderiza backgrounds**
   - [x] **CPU SPC700** — o processador de som, validada contra os ProcessorTests (256 opcodes) + IPL boot ROM e handshake real das portas (jogos comerciais fazem o upload do driver de som e passam do boot do APU)
-  - [x] **PPU modos 0–4 + Mode 7** (2/4/8bpp, camadas BG1–4, grupos de paleta do modo 0, transformação afim) — validada contra as ROMs de teste do PeterLemon
+  - [x] **PPU modos 0–4 + Mode 7 + color math** (2/4/8bpp, camadas BG1–4, grupos de paleta do modo 0, transformação afim, blending main/sub-tela) — validada contra as ROMs de teste do PeterLemon
   - [ ] **DSP** (síntese de áudio) + timing ciclo-a-ciclo — o que falta para jogos como o Super Mario World completarem o boot e tocarem som
-  - [ ] PPU: color math, janelas, sprites com prioridade completa
+  - [ ] PPU: janelas, mosaico, sprites com prioridade completa
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 

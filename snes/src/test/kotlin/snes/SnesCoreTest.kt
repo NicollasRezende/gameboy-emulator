@@ -40,6 +40,15 @@ class SnesCoreTest {
         assertTrue(colors > 10, "Mode 7 não renderizou (só $colors cores) — matriz afim ou VRAM interlaçada errada")
     }
 
+    @Test fun `color math combina duas camadas (blend)`() {
+        val core = SnesCore(loadRom("blendhicolor"))
+        repeat(20) { core.runFrame() }
+        // o blend de 2 BGs via color math (add) produz um gradiente de milhares de cores;
+        // sem o color math seriam poucas (banded), então um número alto prova a composição.
+        val colors = core.framebuffer.toSet().size
+        assertTrue(colors > 200, "color math não compôs as camadas (só $colors cores)")
+    }
+
     @Test fun `save state reproduz a execucao (determinismo)`() {
         val core = SnesCore(loadRom())
         repeat(10) { core.runFrame() }
