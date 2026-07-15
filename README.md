@@ -11,7 +11,7 @@ Os dois lados do cartucho, construídos aqui.
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
 ![JDK](https://img.shields.io/badge/JDK-21-orange?logo=openjdk&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-639%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-640%20passing-brightgreen)
 
 <br>
 
@@ -103,7 +103,7 @@ e <b>color math</b> (blend de duas camadas → gradiente de 3840 cores). Cadeia 
   (**modos 0–4 + Mode 7 + color math**, 2/4/8bpp, sprites), DMA/HDMA e o **APU com SPC700 real** (IPL + handshake). Falta o **DSP** (síntese de áudio) para o som e para jogos como o SMW completarem o boot.
 - 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
-- ✅ **639 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
+- ✅ **640 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
 
 ## 🎯 Precisão
 
@@ -197,7 +197,8 @@ ROM autoral, livre, pronta para jogar.
   - [x] **CPU SPC700** — o processador de som, validada contra os ProcessorTests (256 opcodes) + IPL boot ROM e handshake real das portas (jogos comerciais fazem o upload do driver de som e passam do boot do APU)
   - [x] **PPU modos 0–4 + Mode 7 + color math** (2/4/8bpp, camadas BG1–4, grupos de paleta do modo 0, transformação afim, blending main/sub-tela) — validada contra as ROMs de teste do PeterLemon
   - [ ] **DSP** (síntese de áudio) + timing ciclo-a-ciclo — o que falta para jogos como o Super Mario World completarem o boot e tocarem som
-  - [ ] PPU: janelas, mosaico, sprites com prioridade completa
+  - [x] **PPU: janelas + mosaico** — validadas contra WindowHDMA e MosaicMode3
+  - [ ] PPU: sprites com prioridade completa (hoje ficam sempre por cima)
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 

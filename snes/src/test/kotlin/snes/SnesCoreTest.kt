@@ -49,6 +49,15 @@ class SnesCoreTest {
         assertTrue(colors > 200, "color math não compôs as camadas (só $colors cores)")
     }
 
+    @Test fun `janelas e mosaico renderizam sem quebrar`() {
+        for (rom in listOf("windowhdma", "mosaicmode3")) {
+            val core = SnesCore(loadRom(rom))
+            repeat(30) { core.runFrame() }
+            val colors = core.framebuffer.toSet().size
+            assertTrue(colors > 20, "$rom: framebuffer com poucas cores ($colors)")
+        }
+    }
+
     @Test fun `save state reproduz a execucao (determinismo)`() {
         val core = SnesCore(loadRom())
         repeat(10) { core.runFrame() }

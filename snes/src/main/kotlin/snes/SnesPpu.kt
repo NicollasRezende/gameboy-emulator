@@ -43,6 +43,13 @@ class SnesPpu {
     private var cgwsel = 0; private var cgadsub = 0
     private var fixedR = 0; private var fixedG = 0; private var fixedB = 0
 
+    // janelas: 2 regiões [wh0,wh1] e [wh2,wh3], seleção/inversão por camada e lógica de combinação
+    private var w12sel = 0; private var w34sel = 0; private var wobjsel = 0
+    private var wh0 = 0; private var wh1 = 0; private var wh2 = 0; private var wh3 = 0
+    private var wbglog = 0; private var wobjlog = 0
+    private var tmw = 0; private var tsw = 0
+    private var mosaic = 0
+
     // ---------- conversão de cor ----------
     private fun bgr555(c: Int): Int {
         val r = c and 0x1F; val g = (c shr 5) and 0x1F; val b = (c shr 10) and 0x1F
@@ -76,6 +83,7 @@ class SnesPpu {
             0x03 -> { oamadd = (oamadd and 0xFF) or ((v and 1) shl 8); oamByte = (oamadd * 2) % 0x220 }
             0x04 -> { oam[oamByte] = v; oamByte = (oamByte + 1) % 0x220 } // OAMDATA (bytes sequenciais)
             0x05 -> bgMode = v
+            0x06 -> mosaic = v
             0x07, 0x08, 0x09, 0x0A -> { val bg = (addr and 0xFF) - 0x07; bgTilemapBase[bg] = (v and 0xFC) shl 8; bgSizeWide[bg] = v and 1 != 0; bgSizeBig[bg] = v and 2 != 0 }
             0x0B -> { bgCharBase[0] = (v and 0x0F) shl 12; bgCharBase[1] = (v and 0xF0) shl 8 }
             0x0C -> { bgCharBase[2] = (v and 0x0F) shl 12; bgCharBase[3] = (v and 0xF0) shl 8 }
@@ -102,6 +110,12 @@ class SnesPpu {
                       if (cgLatchHi) cgadd = (cgadd + 1) and 0xFF; cgLatchHi = !cgLatchHi }
             0x2C -> mainScreen = v
             0x2D -> subScreen = v
+            0x23 -> w12sel = v
+            0x24 -> w34sel = v
+            0x25 -> wobjsel = v
+            0x26 -> wh0 = v; 0x27 -> wh1 = v; 0x28 -> wh2 = v; 0x29 -> wh3 = v
+            0x2A -> wbglog = v; 0x2B -> wobjlog = v
+            0x2E -> tmw = v; 0x2F -> tsw = v
             0x30 -> cgwsel = v
             0x31 -> cgadsub = v
             0x32 -> { val i = v and 0x1F; if (v and 0x20 != 0) fixedB = i; if (v and 0x40 != 0) fixedG = i; if (v and 0x80 != 0) fixedR = i }
@@ -142,8 +156,8 @@ class SnesPpu {
             else -> intArrayOf(0, 0, 0, 0)
         }
         // renderiza tela principal (TM) e sub-tela (TS) em buffers separados, do fundo p/ frente
-        renderLayers(y, mainCol, mainLay, mainScreen, bgBpp)
-        renderLayers(y, subCol, subLay, subScreen, bgBpp)
+        renderLayers(y, mainCol, mainLay, mainScreen, bgBpp, tmw)
+        renderLayers(y, subCol, subLay, subScreen, bgBpp, tsw)
 
         // composição com color math (add/sub, half, sub-tela ou cor fixa)
         val useSub = cgwsel and 0x02 != 0
@@ -160,15 +174,30 @@ class SnesPpu {
         }
     }
 
-    private fun renderLayers(y: Int, col: IntArray, lay: IntArray, screen: Int, bgBpp: IntArray) {
-        if (bgBpp[0] == -1) { if (screen and 1 != 0) renderMode7(y, col, lay); if (screen and 0x10 != 0) renderSprites(y, col, lay); return }
+    private fun renderLayers(y: Int, col: IntArray, lay: IntArray, screen: Int, bgBpp: IntArray, winMask: Int) {
+        if (bgBpp[0] == -1) { if (screen and 1 != 0) renderMode7(y, col, lay); if (screen and 0x10 != 0) renderSprites(y, col, lay, winMask); return }
         for (layer in intArrayOf(3, 2, 1, 0)) {
             if (screen and (1 shl layer) == 0) continue
             if (bgBpp[layer] == 0) continue
-            renderBg(y, layer, bgBpp[layer], col, lay)
+            renderBg(y, layer, bgBpp[layer], col, lay, winMask)
         }
-        if (screen and 0x10 != 0) renderSprites(y, col, lay)
+        if (screen and 0x10 != 0) renderSprites(y, col, lay, winMask)
     }
+
+    /** True se a janela mascara (esconde) esta camada no pixel x. */
+    private fun windowValue(layer: Int, x: Int): Boolean {
+        val sel = when { layer < 2 -> w12sel shr (layer * 4); layer < 4 -> w34sel shr ((layer - 2) * 4); else -> wobjsel }
+        val e1 = sel and 0x02 != 0; val i1 = sel and 0x01 != 0
+        val e2 = sel and 0x08 != 0; val i2 = sel and 0x04 != 0
+        if (!e1 && !e2) return false
+        val r1 = if (e1) ((x in wh0..wh1) != i1) else false
+        val r2 = if (e2) ((x in wh2..wh3) != i2) else false
+        if (e1 && !e2) return r1
+        if (e2 && !e1) return r2
+        val log = if (layer < 4) (wbglog shr (layer * 2)) and 3 else wobjlog and 3
+        return when (log) { 0 -> r1 || r2; 1 -> r1 && r2; 2 -> r1 xor r2; else -> !(r1 xor r2) }
+    }
+    private fun masked(layer: Int, x: Int, winMask: Int) = winMask and (1 shl layer) != 0 && windowValue(layer, x)
 
     /** Soma/subtrai duas cores BGR555 por canal (5 bits), com clamp e meia-intensidade opcional. */
     private fun colorMath(a: Int, b: Int, subtract: Boolean, half: Boolean): Int {
@@ -181,17 +210,20 @@ class SnesPpu {
         return (bl shl 10) or (g shl 5) or r
     }
 
-    private fun renderBg(y: Int, bg: Int, bpp: Int, col: IntArray, lay: IntArray) {
+    private fun renderBg(y: Int, bg: Int, bpp: Int, col: IntArray, lay: IntArray, winMask: Int) {
         val hofs = bgHofs[bg]; val vofs = bgVofs[bg]
         val mapBase = bgTilemapBase[bg]
         val charBase = bgCharBase[bg]
         val widthTiles = if (bgSizeWide[bg]) 64 else 32
         val heightTiles = if (bgSizeBig[bg]) 64 else 32
-        val fy = (y + vofs) and 0x7FF
+        val mosN = ((mosaic shr 4) and 0x0F) + 1
+        val mosOn = mosN > 1 && mosaic and (1 shl bg) != 0 // pixeliza em blocos NxN
+        val fy = ((if (mosOn) (y / mosN) * mosN else y) + vofs) and 0x7FF
         val wordsPerTile = when (bpp) { 2 -> 8; 4 -> 16; else -> 32 } // 8bpp = 32 words
 
         for (x in 0 until 256) {
-            val fx = (x + hofs) and 0x7FF
+            if (masked(bg, x, winMask)) continue
+            val fx = ((if (mosOn) (x / mosN) * mosN else x) + hofs) and 0x7FF
             val tileX = (fx shr 3); val tileY = (fy shr 3)
             // seleciona sub-mapa 32x32 (screens) conforme tamanho
             val scX = if (widthTiles == 64 && tileX >= 32) 1 else 0
@@ -258,7 +290,7 @@ class SnesPpu {
         return ci
     }
 
-    private fun renderSprites(y: Int, col: IntArray, lay: IntArray) {
+    private fun renderSprites(y: Int, col: IntArray, lay: IntArray, winMask: Int) {
         val (smallW, largeW) = spriteSizes()
         val nameBase = (obsel and 0x07) shl 13
         val nameStep = (((obsel shr 3) and 0x03) + 1) shl 12
@@ -284,6 +316,7 @@ class SnesPpu {
                 var rx = if (flipX) size - 1 - c else c
                 val txTile = (tile + tileHi + (rx shr 3) + (ry shr 3) * 16) and 0x1FF
                 val charWord = nameBase + (if (txTile >= 0x100) nameStep else 0) + (txTile and 0xFF) * 16
+                if (masked(4, x, winMask)) continue
                 val ci = tilePixel(charWord, rx and 7, ry and 7, 4)
                 if (ci != 0) { col[x] = cgram[(128 + pal * 16 + ci) and 0xFF]; lay[x] = 4 }
             }
@@ -303,6 +336,7 @@ class SnesPpu {
         for (i in 0..3) { o.writeInt(bgTilemapBase[i]); o.writeInt(bgCharBase[i]); o.writeInt(bgHofs[i]); o.writeInt(bgVofs[i]); o.writeBoolean(bgSizeWide[i]); o.writeBoolean(bgSizeBig[i]) }
         o.writeInt(m7a); o.writeInt(m7b); o.writeInt(m7c); o.writeInt(m7d); o.writeInt(m7x); o.writeInt(m7y); o.writeInt(m7hofs); o.writeInt(m7vofs); o.writeInt(m7sel)
         o.writeInt(cgwsel); o.writeInt(cgadsub); o.writeInt(fixedR); o.writeInt(fixedG); o.writeInt(fixedB)
+        o.writeInt(w12sel); o.writeInt(w34sel); o.writeInt(wobjsel); o.writeInt(wh0); o.writeInt(wh1); o.writeInt(wh2); o.writeInt(wh3); o.writeInt(wbglog); o.writeInt(wobjlog); o.writeInt(tmw); o.writeInt(tsw); o.writeInt(mosaic)
     }
     internal fun loadState(i: java.io.DataInputStream) {
         for (j in vram.indices) vram[j] = i.readUnsignedShort(); for (j in cgram.indices) cgram[j] = i.readUnsignedShort(); for (j in oam.indices) oam[j] = i.readUnsignedShort()
@@ -312,5 +346,6 @@ class SnesPpu {
         for (k in 0..3) { bgTilemapBase[k] = i.readInt(); bgCharBase[k] = i.readInt(); bgHofs[k] = i.readInt(); bgVofs[k] = i.readInt(); bgSizeWide[k] = i.readBoolean(); bgSizeBig[k] = i.readBoolean() }
         m7a = i.readInt(); m7b = i.readInt(); m7c = i.readInt(); m7d = i.readInt(); m7x = i.readInt(); m7y = i.readInt(); m7hofs = i.readInt(); m7vofs = i.readInt(); m7sel = i.readInt()
         cgwsel = i.readInt(); cgadsub = i.readInt(); fixedR = i.readInt(); fixedG = i.readInt(); fixedB = i.readInt()
+        w12sel = i.readInt(); w34sel = i.readInt(); wobjsel = i.readInt(); wh0 = i.readInt(); wh1 = i.readInt(); wh2 = i.readInt(); wh3 = i.readInt(); wbglog = i.readInt(); wobjlog = i.readInt(); tmw = i.readInt(); tsw = i.readInt(); mosaic = i.readInt()
     }
 }
