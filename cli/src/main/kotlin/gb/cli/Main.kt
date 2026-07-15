@@ -78,10 +78,26 @@ fun main(args: Array<String>) {
         val paletteName = args.indexOf("--palette").let { if (it >= 0 && it + 1 < args.size) args[it + 1] else null }
         if (paletteName != null) (core as? GbCore)?.gameBoy?.ppu?.dmgPalette = DmgPalettes.byName(paletteName)
 
+        val snesCore = core as? snes.SnesCore
+        if (snesCore != null && args.contains("--scanbright")) {
+            // varre frame a frame e captura o de brilho máximo (achar a logo/conteúdo)
+            var peakFrame = 0; var peakColors = -1
+            for (fr in 1..frames) {
+                core.runFrame()
+                val colors = core.framebuffer.toHashSet().size
+                if (colors > peakColors) { peakColors = colors; peakFrame = fr }
+            }
+            println("── Máx de cores: $peakColors no frame $peakFrame (de $frames) ──")
+            // re-executa até o frame de pico e salva
+            val c2 = snes.SnesCore(rom, save); repeat(peakFrame) { c2.runFrame() }
+            writePng(c2.framebuffer, outPath, scale = 4, c2.width, c2.height)
+            println("── PNG do frame $peakFrame salvo em $outPath ──")
+            return
+        }
         repeat(frames) { core.runFrame() }
         writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
         println("── PNG salvo em $outPath ($frames frames, escala 4x) ──")
-        (core as? snes.SnesCore)?.let { println("── Diagnóstico SNES: ${it.debugInfo()} ──") }
+        snesCore?.let { println("── Diagnóstico SNES: ${it.debugInfo()} ──") }
 
         if (savePath != null) {
             val snap = core.saveRam()

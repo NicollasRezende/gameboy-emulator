@@ -56,6 +56,7 @@ class SnesPpu {
     private fun vramStep() = when (vmain and 0x03) { 0 -> 1; 1 -> 32; else -> 128 }
 
     fun debug() = "PPU: blank=%b bright=%d modo=%d TM=%02X".format(forcedBlank, brightness, bgMode, mainScreen)
+    fun visibleBrightness() = if (forcedBlank) 0 else brightness
 
     fun writeReg(addr: Int, value: Int) {
         val v = value and 0xFF
