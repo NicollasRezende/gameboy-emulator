@@ -69,7 +69,7 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     }
 
     override fun setButton(button: Button, pressed: Boolean) = input.setButton(button, pressed)
-    override fun drainAudio(): ShortArray = ShortArray(0) // sem áudio (APU real: próximo milestone)
+    override fun drainAudio(): ShortArray = apu.drainAudio() // DSP a 32 kHz, reamostrado p/ 48 kHz
     override fun saveRam(): IntArray? = if (cart.hasBattery && cart.sram.isNotEmpty()) cart.sram.copyOf() else null
 
     override fun saveState(): ByteArray {

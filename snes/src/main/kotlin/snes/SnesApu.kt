@@ -9,8 +9,10 @@ package snes
  */
 class SnesApu : Bus700 {
     private val aram = IntArray(0x10000)
-    private val dsp = IntArray(0x80)
+    val dsp = SnesDsp(aram)
     private var dspAddr = 0
+    private var dspAcc = 0
+    private val audioBuf = ArrayList<Short>(2048) // 32 kHz estéreo (L,R intercalado)
     private var control = 0xB0 // IPL habilitado + timers no reset
     private var iplEnabled = true
 
@@ -65,7 +67,32 @@ class SnesApu : Bus700 {
             val c = cpu.step(); spcSteps++
             acc -= c
             tickTimers(c)
+            dspAcc += c
+            while (dspAcc >= 32) { // DSP a 32 kHz (1.024 MHz / 32)
+                dspAcc -= 32
+                val s = dsp.clockSample()
+                audioBuf.add((s and 0xFFFF).toShort()); audioBuf.add((s shr 16).toShort())
+            }
         }
+    }
+
+    /** Retira o áudio acumulado, reamostrado de 32 kHz para 48 kHz (estéreo intercalado). */
+    fun drainAudio(): ShortArray {
+        val inFrames = audioBuf.size / 2
+        if (inFrames == 0) return ShortArray(0)
+        val outFrames = inFrames * 48000 / 32000
+        val out = ShortArray(outFrames * 2)
+        for (f in 0 until outFrames) {
+            val srcPos = f * 32000.0 / 48000.0
+            val i0 = srcPos.toInt(); val i1 = (i0 + 1).coerceAtMost(inFrames - 1)
+            val frac = srcPos - i0
+            for (ch in 0..1) {
+                val a = audioBuf[i0 * 2 + ch]; val b = audioBuf[i1 * 2 + ch]
+                out[f * 2 + ch] = (a + (b - a) * frac).toInt().toShort()
+            }
+        }
+        audioBuf.clear()
+        return out
     }
 
     private fun tickTimers(spcCycles: Int) {
@@ -102,7 +129,7 @@ class SnesApu : Bus700 {
 
     private fun regRead(a: Int): Int = when (a.also { spcRegReads[it and 0xFF]++ }) {
         0xF2 -> dspAddr
-        0xF3 -> dsp[dspAddr and 0x7F]
+        0xF3 -> dsp.readReg(dspAddr)
         0xF4, 0xF5, 0xF6, 0xF7 -> mainToSpc[a - 0xF4]
         0xFD, 0xFE, 0xFF -> { val v = timerOut[a - 0xFD]; timerOut[a - 0xFD] = 0; v } // 4-bit, limpa na leitura
         else -> aram[a]
@@ -121,7 +148,7 @@ class SnesApu : Bus700 {
                 }
             }
             0xF2 -> dspAddr = v
-            0xF3 -> if (dspAddr < 0x80) dsp[dspAddr] = v
+            0xF3 -> if (dspAddr < 0x80) dsp.writeReg(dspAddr, v)
             0xF4, 0xF5, 0xF6, 0xF7 -> spcToMain[a - 0xF4] = v
             0xFA, 0xFB, 0xFC -> timerTarget[a - 0xFA] = v
             else -> aram[a] = v
@@ -131,7 +158,7 @@ class SnesApu : Bus700 {
     internal fun saveState(o: java.io.DataOutputStream) {
         cpu.saveState(o)
         o.writeDouble(acc)
-        for (b in aram) o.writeByte(b); for (b in dsp) o.writeByte(b)
+        for (b in aram) o.writeByte(b); dsp.saveState(o)
         o.writeInt(dspAddr); o.writeInt(control); o.writeBoolean(iplEnabled)
         for (p in mainToSpc) o.writeInt(p); for (p in spcToMain) o.writeInt(p)
         for (t in 0..2) { o.writeInt(timerTarget[t]); o.writeInt(timerCounter[t]); o.writeInt(timerOut[t]); o.writeBoolean(timerEnabled[t]); o.writeInt(timerDiv[t]) }
@@ -139,7 +166,7 @@ class SnesApu : Bus700 {
     internal fun loadState(i: java.io.DataInputStream) {
         cpu.loadState(i)
         acc = i.readDouble()
-        for (j in aram.indices) aram[j] = i.readUnsignedByte(); for (j in dsp.indices) dsp[j] = i.readUnsignedByte()
+        for (j in aram.indices) aram[j] = i.readUnsignedByte(); dsp.loadState(i)
         dspAddr = i.readInt(); control = i.readInt(); iplEnabled = i.readBoolean()
         for (j in 0..3) mainToSpc[j] = i.readInt(); for (j in 0..3) spcToMain[j] = i.readInt()
         for (t in 0..2) { timerTarget[t] = i.readInt(); timerCounter[t] = i.readInt(); timerOut[t] = i.readInt(); timerEnabled[t] = i.readBoolean(); timerDiv[t] = i.readInt() }
