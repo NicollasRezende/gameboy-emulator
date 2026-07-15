@@ -135,15 +135,25 @@ class SnesPpu {
     }
 
     // ---------- renderização ----------
-    // buffers de cor bruta (BGR555) e camada de origem (0-3 BG, 4 OBJ, 5 backdrop) por pixel
-    private val mainCol = IntArray(256); private val mainLay = IntArray(256)
-    private val subCol = IntArray(256); private val subLay = IntArray(256)
+    // buffers de cor bruta (BGR555), camada de origem (0-3 BG, 4 OBJ, 5 backdrop) e prioridade
+    private val mainCol = IntArray(256); private val mainLay = IntArray(256); private val mainPri = IntArray(256)
+    private val subCol = IntArray(256); private val subLay = IntArray(256); private val subPri = IntArray(256)
+    private val sprC = IntArray(256); private val sprP = IntArray(256)
+
+    /** Prioridade (maior = mais à frente) de um BG conforme a ordem de camadas do SNES (base no modo 1). */
+    private fun bgPriValue(bg: Int, hi: Boolean): Int = when (bg) {
+        0 -> if (hi) 11 else 8
+        1 -> if (hi) 10 else 7
+        2 -> if (hi) (if (bgMode and 0x08 != 0) 13 else 5) else 2 // BG3 sobe ao topo se BGMODE bit3
+        else -> if (hi) 4 else 1
+    }
+    private fun sprPriValue(op: Int) = when (op) { 3 -> 12; 2 -> 9; 1 -> 6; else -> 3 }
 
     private fun renderScanline(y: Int) {
         val row = y * 256
         if (forcedBlank) { for (x in 0 until 256) framebuffer[row + x] = 0xFF000000.toInt(); return }
         val bd = cgram[0]
-        for (x in 0 until 256) { mainCol[x] = bd; mainLay[x] = 5; subCol[x] = bd; subLay[x] = 5 }
+        for (x in 0 until 256) { mainCol[x] = bd; mainLay[x] = 5; mainPri[x] = 0; subCol[x] = bd; subLay[x] = 5; subPri[x] = 0 }
 
         val bgBpp = when (bgMode and 0x07) {
             0 -> intArrayOf(2, 2, 2, 2)
@@ -155,9 +165,9 @@ class SnesPpu {
             7 -> intArrayOf(-1, 0, 0, 0) // Mode 7 (afim) — camada BG1 especial
             else -> intArrayOf(0, 0, 0, 0)
         }
-        // renderiza tela principal (TM) e sub-tela (TS) em buffers separados, do fundo p/ frente
-        renderLayers(y, mainCol, mainLay, mainScreen, bgBpp, tmw)
-        renderLayers(y, subCol, subLay, subScreen, bgBpp, tsw)
+        // renderiza tela principal (TM) e sub-tela (TS) em buffers separados, compostos por prioridade
+        renderLayers(y, mainCol, mainLay, mainPri, mainScreen, bgBpp, tmw)
+        renderLayers(y, subCol, subLay, subPri, subScreen, bgBpp, tsw)
 
         // composição com color math (add/sub, half, sub-tela ou cor fixa)
         val useSub = cgwsel and 0x02 != 0
@@ -174,14 +184,27 @@ class SnesPpu {
         }
     }
 
-    private fun renderLayers(y: Int, col: IntArray, lay: IntArray, screen: Int, bgBpp: IntArray, winMask: Int) {
-        if (bgBpp[0] == -1) { if (screen and 1 != 0) renderMode7(y, col, lay); if (screen and 0x10 != 0) renderSprites(y, col, lay, winMask); return }
+    private fun renderLayers(y: Int, col: IntArray, lay: IntArray, pri: IntArray, screen: Int, bgBpp: IntArray, winMask: Int) {
+        if (bgBpp[0] == -1) { // Mode 7: BG1 afim (prioridade fixa 8) + sprites por cima
+            if (screen and 1 != 0) renderMode7(y, col, lay, pri)
+            if (screen and 0x10 != 0) mergeSprites(y, col, lay, pri, winMask)
+            return
+        }
         for (layer in intArrayOf(3, 2, 1, 0)) {
             if (screen and (1 shl layer) == 0) continue
             if (bgBpp[layer] == 0) continue
-            renderBg(y, layer, bgBpp[layer], col, lay, winMask)
+            renderBg(y, layer, bgBpp[layer], col, lay, pri, winMask)
         }
-        if (screen and 0x10 != 0) renderSprites(y, col, lay, winMask)
+        if (screen and 0x10 != 0) mergeSprites(y, col, lay, pri, winMask)
+    }
+
+    /** Renderiza os sprites num buffer (sprite topo por pixel) e os compõe por prioridade. */
+    private fun mergeSprites(y: Int, col: IntArray, lay: IntArray, pri: IntArray, winMask: Int) {
+        for (x in 0 until 256) { sprC[x] = -1 }
+        renderSprites(y, winMask)
+        for (x in 0 until 256) {
+            if (sprC[x] >= 0 && sprP[x] > pri[x]) { col[x] = sprC[x]; lay[x] = 4; pri[x] = sprP[x] }
+        }
     }
 
     /** True se a janela mascara (esconde) esta camada no pixel x. */
@@ -210,7 +233,7 @@ class SnesPpu {
         return (bl shl 10) or (g shl 5) or r
     }
 
-    private fun renderBg(y: Int, bg: Int, bpp: Int, col: IntArray, lay: IntArray, winMask: Int) {
+    private fun renderBg(y: Int, bg: Int, bpp: Int, col: IntArray, lay: IntArray, pri: IntArray, winMask: Int) {
         val hofs = bgHofs[bg]; val vofs = bgVofs[bg]
         val mapBase = bgTilemapBase[bg]
         val charBase = bgCharBase[bg]
@@ -234,6 +257,8 @@ class SnesPpu {
             val tileNum = entry and 0x3FF
             val pal = (entry shr 10) and 7
             val flipX = entry and 0x4000 != 0; val flipY = entry and 0x8000 != 0
+            val p = bgPriValue(bg, entry and 0x2000 != 0)
+            if (p <= pri[x]) continue // já há algo com prioridade >= aqui
             var px = fx and 7; var py = fy and 7
             if (flipX) px = 7 - px; if (flipY) py = 7 - py
             val ci = tilePixel(charBase + tileNum * wordsPerTile, px, py, bpp)
@@ -244,7 +269,7 @@ class SnesPpu {
                     bpp == 8 -> 0
                     else -> (if (bgMode == 0) bg * 32 else 0) + (if (bpp == 2) pal * 4 else pal * 16)
                 }
-                col[x] = cgram[(palBase + ci) and 0xFF]; lay[x] = bg
+                col[x] = cgram[(palBase + ci) and 0xFF]; lay[x] = bg; pri[x] = p
             }
         }
     }
@@ -256,7 +281,7 @@ class SnesPpu {
      * Mode 7: um único fundo 128×128 tiles (8bpp) transformado pela matriz afim A/B/C/D em
      * torno do centro (M7X,M7Y). VRAM interlaçada: byte baixo = tilemap, byte alto = gráfico.
      */
-    private fun renderMode7(y: Int, col: IntArray, lay: IntArray) {
+    private fun renderMode7(y: Int, col: IntArray, lay: IntArray, pri: IntArray) {
         val a = s16(m7a); val b = s16(m7b); val c = s16(m7c); val d = s16(m7d)
         val cx = s13(m7x); val cy = s13(m7y)
         val lx = s13(m7hofs - cx); val ly = s13(m7vofs - cy)
@@ -273,7 +298,7 @@ class SnesPpu {
             }
             val tile = vram[(vy shr 3) * 128 + (vx shr 3)] and 0xFF
             val ci = (vram[(tile * 64 + (vy and 7) * 8 + (vx and 7)) and 0x7FFF] shr 8) and 0xFF
-            if (ci != 0) { col[x] = cgram[ci]; lay[x] = 0 }
+            if (ci != 0) { col[x] = cgram[ci]; lay[x] = 0; pri[x] = 8 }
         }
     }
 
@@ -290,7 +315,7 @@ class SnesPpu {
         return ci
     }
 
-    private fun renderSprites(y: Int, col: IntArray, lay: IntArray, winMask: Int) {
+    private fun renderSprites(y: Int, winMask: Int) {
         val (smallW, largeW) = spriteSizes()
         val nameBase = (obsel and 0x07) shl 13
         val nameStep = (((obsel shr 3) and 0x03) + 1) shl 12
@@ -307,6 +332,7 @@ class SnesPpu {
             val rowIn = (y - by) and 0xFF
             if (rowIn >= size) continue
             val pal = (attr shr 1) and 7
+            val objPri = sprPriValue((attr shr 4) and 3)
             val flipX = attr and 0x40 != 0; val flipY = attr and 0x80 != 0
             val tileHi = (attr and 1) shl 8
             var ry = if (flipY) size - 1 - rowIn else rowIn
@@ -318,7 +344,7 @@ class SnesPpu {
                 val charWord = nameBase + (if (txTile >= 0x100) nameStep else 0) + (txTile and 0xFF) * 16
                 if (masked(4, x, winMask)) continue
                 val ci = tilePixel(charWord, rx and 7, ry and 7, 4)
-                if (ci != 0) { col[x] = cgram[(128 + pal * 16 + ci) and 0xFF]; lay[x] = 4 }
+                if (ci != 0) { sprC[x] = cgram[(128 + pal * 16 + ci) and 0xFF]; sprP[x] = objPri } // sprite topo (índice menor vence)
             }
         }
     }
