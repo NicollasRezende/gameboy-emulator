@@ -34,6 +34,11 @@ class SnesPpu {
     private val bgLatch = IntArray(4)
     private var scrollLatch = 0
 
+    // Mode 7 (transformação afim): matriz A/B/C/D + centro X/Y + scroll, com latch de 1 byte
+    private var m7a = 0; private var m7b = 0; private var m7c = 0; private var m7d = 0
+    private var m7x = 0; private var m7y = 0; private var m7hofs = 0; private var m7vofs = 0
+    private var m7sel = 0; private var m7latch = 0
+
     // ---------- conversão de cor ----------
     private fun bgr555(c: Int): Int {
         val r = c and 0x1F; val g = (c shr 5) and 0x1F; val b = (c shr 10) and 0x1F
@@ -55,7 +60,7 @@ class SnesPpu {
 
     private fun vramStep() = when (vmain and 0x03) { 0 -> 1; 1 -> 32; else -> 128 }
 
-    fun debug() = "PPU: blank=%b bright=%d modo=%d TM=%02X".format(forcedBlank, brightness, bgMode, mainScreen)
+    fun debug() = "PPU: blank=%b bright=%d modo=%d TM=%02X".format(forcedBlank, brightness, bgMode and 0x07, mainScreen)
     fun visibleBrightness() = if (forcedBlank) 0 else brightness
 
     fun writeReg(addr: Int, value: Int) {
@@ -70,8 +75,19 @@ class SnesPpu {
             0x07, 0x08, 0x09, 0x0A -> { val bg = (addr and 0xFF) - 0x07; bgTilemapBase[bg] = (v and 0xFC) shl 8; bgSizeWide[bg] = v and 1 != 0; bgSizeBig[bg] = v and 2 != 0 }
             0x0B -> { bgCharBase[0] = (v and 0x0F) shl 12; bgCharBase[1] = (v and 0xF0) shl 8 }
             0x0C -> { bgCharBase[2] = (v and 0x0F) shl 12; bgCharBase[3] = (v and 0xF0) shl 8 }
-            0x0D, 0x0F, 0x11, 0x13 -> { val bg = ((addr and 0xFF) - 0x0D) / 2; bgHofs[bg] = ((v shl 8) or (bgLatch[bg] and 0xF8) or (scrollLatch and 7)); bgLatch[bg] = v; scrollLatch = v }
-            0x0E, 0x10, 0x12, 0x14 -> { val bg = ((addr and 0xFF) - 0x0E) / 2; bgVofs[bg] = ((v shl 8) or scrollLatch); scrollLatch = v }
+            0x0D -> { bgHofs[0] = ((v shl 8) or (bgLatch[0] and 0xF8) or (scrollLatch and 7)); bgLatch[0] = v; scrollLatch = v
+                      m7hofs = ((v shl 8) or m7latch) and 0x1FFF; m7latch = v } // BG1HOFS + M7HOFS
+            0x0E -> { bgVofs[0] = ((v shl 8) or scrollLatch); scrollLatch = v
+                      m7vofs = ((v shl 8) or m7latch) and 0x1FFF; m7latch = v } // BG1VOFS + M7VOFS
+            0x0F, 0x11, 0x13 -> { val bg = ((addr and 0xFF) - 0x0D) / 2; bgHofs[bg] = ((v shl 8) or (bgLatch[bg] and 0xF8) or (scrollLatch and 7)); bgLatch[bg] = v; scrollLatch = v }
+            0x10, 0x12, 0x14 -> { val bg = ((addr and 0xFF) - 0x0E) / 2; bgVofs[bg] = ((v shl 8) or scrollLatch); scrollLatch = v }
+            0x1A -> m7sel = v
+            0x1B -> { m7a = (v shl 8) or m7latch; m7latch = v }
+            0x1C -> { m7b = (v shl 8) or m7latch; m7latch = v }
+            0x1D -> { m7c = (v shl 8) or m7latch; m7latch = v }
+            0x1E -> { m7d = (v shl 8) or m7latch; m7latch = v }
+            0x1F -> { m7x = (v shl 8) or m7latch; m7latch = v }
+            0x20 -> { m7y = (v shl 8) or m7latch; m7latch = v }
             0x15 -> vmain = v
             0x16 -> vmadd = (vmadd and 0x7F00) or v
             0x17 -> vmadd = (vmadd and 0xFF) or ((v and 0x7F) shl 8)
@@ -106,6 +122,8 @@ class SnesPpu {
         val backdrop = bgr555(cgram[0])
         if (forcedBlank) { for (x in 0 until 256) framebuffer[row + x] = 0xFF000000.toInt(); return }
         for (x in 0 until 256) { framebuffer[row + x] = backdrop; linePrio[x] = -1 }
+
+        if (bgMode and 0x07 == 7) { renderMode7(y, row); if (mainScreen and 0x10 != 0) renderSprites(y, row); return }
 
         // profundidade de bits por BG conforme o modo de fundo (bits 0-2 de BGMODE).
         // Modos 5/6 (hires) tratados como 4/2bpp; modo 7 (afim) ainda não renderizado.
@@ -160,6 +178,34 @@ class SnesPpu {
                 }
                 framebuffer[row + x] = bgr555(cgram[(palBase + ci) and 0xFF])
             }
+        }
+    }
+
+    private fun s16(v: Int) = if (v and 0x8000 != 0) v - 0x10000 else v
+    private fun s13(v: Int) = (v and 0x1FFF).let { if (it and 0x1000 != 0) it - 0x2000 else it }
+
+    /**
+     * Mode 7: um único fundo 128×128 tiles (8bpp) transformado pela matriz afim A/B/C/D em
+     * torno do centro (M7X,M7Y). VRAM interlaçada: byte baixo = tilemap, byte alto = gráfico.
+     */
+    private fun renderMode7(y: Int, row: Int) {
+        val a = s16(m7a); val b = s16(m7b); val c = s16(m7c); val d = s16(m7d)
+        val cx = s13(m7x); val cy = s13(m7y)
+        val lx = s13(m7hofs - cx); val ly = s13(m7vofs - cy)
+        val baseX = a * lx + b * ly + b * y + (cx shl 8)
+        val baseY = c * lx + d * ly + d * y + (cy shl 8)
+        val wrap = m7sel and 0x80 == 0 // bit7=0: repete (wrap); bit7=1: fora do mapa é transparente/char0
+        for (x in 0 until 256) {
+            var vx = (baseX + a * x) shr 8
+            var vy = (baseY + c * x) shr 8
+            if (vx < 0 || vx >= 1024 || vy < 0 || vy >= 1024) {
+                if (wrap) { vx = vx and 1023; vy = vy and 1023 }
+                else if (m7sel and 0x40 != 0) { vx = vx and 7; vy = vy and 7 } // char 0 fora do mapa
+                else continue // transparente
+            }
+            val tile = vram[(vy shr 3) * 128 + (vx shr 3)] and 0xFF
+            val ci = (vram[(tile * 64 + (vy and 7) * 8 + (vx and 7)) and 0x7FFF] shr 8) and 0xFF
+            if (ci != 0) framebuffer[row + x] = bgr555(cgram[ci])
         }
     }
 
@@ -219,6 +265,7 @@ class SnesPpu {
         o.writeInt(vmain); o.writeInt(vmadd); o.writeInt(cgadd); o.writeInt(oamadd)
         o.writeInt(mainScreen); o.writeInt(subScreen); o.writeInt(scanline)
         for (i in 0..3) { o.writeInt(bgTilemapBase[i]); o.writeInt(bgCharBase[i]); o.writeInt(bgHofs[i]); o.writeInt(bgVofs[i]); o.writeBoolean(bgSizeWide[i]); o.writeBoolean(bgSizeBig[i]) }
+        o.writeInt(m7a); o.writeInt(m7b); o.writeInt(m7c); o.writeInt(m7d); o.writeInt(m7x); o.writeInt(m7y); o.writeInt(m7hofs); o.writeInt(m7vofs); o.writeInt(m7sel)
     }
     internal fun loadState(i: java.io.DataInputStream) {
         for (j in vram.indices) vram[j] = i.readUnsignedShort(); for (j in cgram.indices) cgram[j] = i.readUnsignedShort(); for (j in oam.indices) oam[j] = i.readUnsignedShort()
@@ -226,5 +273,6 @@ class SnesPpu {
         vmain = i.readInt(); vmadd = i.readInt(); cgadd = i.readInt(); oamadd = i.readInt()
         mainScreen = i.readInt(); subScreen = i.readInt(); scanline = i.readInt()
         for (k in 0..3) { bgTilemapBase[k] = i.readInt(); bgCharBase[k] = i.readInt(); bgHofs[k] = i.readInt(); bgVofs[k] = i.readInt(); bgSizeWide[k] = i.readBoolean(); bgSizeBig[k] = i.readBoolean() }
+        m7a = i.readInt(); m7b = i.readInt(); m7c = i.readInt(); m7d = i.readInt(); m7x = i.readInt(); m7y = i.readInt(); m7hofs = i.readInt(); m7vofs = i.readInt(); m7sel = i.readInt()
     }
 }

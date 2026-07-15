@@ -33,6 +33,13 @@ class SnesCoreTest {
         }
     }
 
+    @Test fun `renderiza Mode 7 (transformacao afim)`() {
+        val core = SnesCore(loadRom("mode7rotzoom"))
+        core.runFrame() // a pista aparece já no 1o frame (matriz via HDMA)
+        val colors = core.framebuffer.toSet().size
+        assertTrue(colors > 10, "Mode 7 não renderizou (só $colors cores) — matriz afim ou VRAM interlaçada errada")
+    }
+
     @Test fun `save state reproduz a execucao (determinismo)`() {
         val core = SnesCore(loadRom())
         repeat(10) { core.runFrame() }
