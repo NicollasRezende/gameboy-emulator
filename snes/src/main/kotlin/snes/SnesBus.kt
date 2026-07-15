@@ -8,7 +8,7 @@ package snes
 class SnesBus(
     val cart: SnesCartridge,
     val ppu: SnesPpu,
-    val apu: SnesApuStub,
+    val apu: SnesApu,
     val input: SnesInput,
 ) : Bus65816 {
     val wram = IntArray(0x20000)
@@ -58,7 +58,7 @@ class SnesBus(
 
     // ---------- B-bus ($2100-$21FF): PPU, APU, porta WRAM ----------
     fun regReadB(a: Int): Int = when {
-        a in 0x2140..0x217F -> apu.read(a and 3)
+        a in 0x2140..0x217F -> apu.readPort(a and 3)
         a == 0x2180 -> wram[wramPort and 0x1FFFF].also { wramPort = (wramPort + 1) and 0x1FFFF }
         a in 0x2100..0x213F -> ppu.readReg(a)
         else -> mdr
@@ -67,7 +67,7 @@ class SnesBus(
     fun regWriteB(a: Int, v: Int) {
         when {
             a in 0x2100..0x213F -> ppu.writeReg(a, v)
-            a in 0x2140..0x217F -> apu.write(a and 3, v)
+            a in 0x2140..0x217F -> apu.writePort(a and 3, v)
             a == 0x2180 -> { wram[wramPort and 0x1FFFF] = v; wramPort = (wramPort + 1) and 0x1FFFF }
             a == 0x2181 -> wramPort = (wramPort and 0x1FF00) or v
             a == 0x2182 -> wramPort = (wramPort and 0x100FF) or (v shl 8)

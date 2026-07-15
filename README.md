@@ -11,7 +11,7 @@ Os dois lados do cartucho, construídos aqui.
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
 ![JDK](https://img.shields.io/badge/JDK-21-orange?logo=openjdk&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-381%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-637%20passing-brightgreen)
 
 <br>
 
@@ -99,11 +99,11 @@ próximo milestone.</sub>
 - 🎮 **NES**: CPU 6502 validada instrução a instrução pelo `nestest.log`, PPU por scanline
   (scroll, sprites, sprite-0 hit), APU de 5 canais (incl. **DMC**), mappers NROM/MMC1/UNROM/CNROM/**MMC3**
   (com **IRQ de scanline** — o split de tela de SMB3, Mega Man e cia.).
-- 🟣 **SNES (beta)**: CPU **65C816** validada contra os ProcessorTests (~2,5 mi de vetores), PPU
-  (backgrounds modo 0-1, sprites), DMA/HDMA — **boota ROMs de teste e renderiza**. Áudio (SPC700+DSP) é o próximo passo.
+- 🟣 **SNES (beta)**: CPUs **65C816** e **SPC700** validadas contra os ProcessorTests, PPU
+  (backgrounds modo 0-1, sprites), DMA/HDMA e o **APU com SPC700 real** (IPL + handshake — jogos comerciais fazem o upload do driver de som). Falta o **DSP** (síntese de áudio) para o som e para jogos como o SMW completarem o boot.
 - 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
-- ✅ **381 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816).
+- ✅ **637 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
 
 ## 🎯 Precisão
 
@@ -119,7 +119,8 @@ A precisão não é opinião — é medida por ROMs de teste da comunidade, exec
 | **cgb-acid2** | PPU do Game Boy **Color** (paletas/atributos) | ✅ pixel-perfect |
 | **mooneye** | banking (MBC1/5), timer, DAA, e mais | ✅ 24 testes |
 | **nestest** (NES) | CPU 6502: 8991 instruções comparadas com o log de referência (PC, registradores, flags, ciclos) | ✅ instrução a instrução |
-| **ProcessorTests** (SNES) | CPU 65C816: 254 opcodes em modo emulação, ~2,5 mi de vetores estado-a-estado | ✅ |
+| **ProcessorTests** (SNES CPU) | 65C816: 254 opcodes em modo emulação, ~2,5 mi de vetores estado-a-estado | ✅ |
+| **ProcessorTests** (SNES APU) | SPC700: 256 opcodes, estado a estado (A/X/Y/SP/PC/PSW + RAM) | ✅ |
 | **Save states** | determinismo (snapshot → replay idêntico), GB, NES e SNES | ✅ |
 
 <div align="center">
@@ -141,7 +142,7 @@ GameBoy (scheduler: CPU → PPU/APU/timer a cada M-cycle)
 
 :api      interface EmulatorCore — o contrato que qualquer console implementa
 :nes      NES — CPU 6502 (nestest), PPU scanline, APU, mappers 0–4 (MMC3+IRQ)
-:snes     SNES — CPU 65C816 (ProcessorTests), PPU BG modo 0-1 + sprites, DMA/HDMA (beta, sem áudio)
+:snes     SNES — CPUs 65C816 + SPC700 (ProcessorTests), PPU BG modo 0-1 + sprites, DMA/HDMA, APU c/ IPL (beta)
 :cli      runner (serial, trace, screenshot, save, paleta)
 :desktop  app multi-sistema (seletor de console, biblioteca, áudio, gamepad, save states…)
 homebrew/ CINZA — ROM autoral + artigo técnico
@@ -193,8 +194,9 @@ ROM autoral, livre, pronta para jogar.
 - [ ] **SNES** — em construção pela escada de sempre:
   - [x] **CPU 65C816** — validada contra os ProcessorTests (254 opcodes em modo emulação, ~2,5 mi de vetores estado-a-estado)
   - [x] **Sistema bootável** — mapa de memória (LoROM/HiROM), DMA/HDMA, PPU (backgrounds modo 0-1, sprites), interrupções, controle; **roda ROMs de teste e renderiza backgrounds**
+  - [x] **CPU SPC700** — o processador de som, validada contra os ProcessorTests (256 opcodes) + IPL boot ROM e handshake real das portas (jogos comerciais fazem o upload do driver de som e passam do boot do APU)
+  - [ ] **DSP** (síntese de áudio) + timers exatos — o que falta para jogos como o Super Mario World completarem o boot e tocarem som
   - [ ] PPU modos 2–7 (incl. Mode 7 afim), color math, janelas
-  - [ ] **SPC700 + DSP** (áudio real — hoje é um stub de handshake, sem som)
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 

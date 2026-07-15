@@ -11,7 +11,7 @@ import emu.EmulatorCore
 class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     val cart = SnesCartridge(romBytes)
     val ppu = SnesPpu()
-    val apu = SnesApuStub()
+    val apu = SnesApu()
     val input = SnesInput()
     val bus = SnesBus(cart, ppu, apu, input)
     val cpu = Cpu65816(bus)
@@ -27,6 +27,7 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
             readB = { reg -> bus.regReadB(0x2100 or reg) },
             writeA = { addr, v -> bus.write(addr, v) },
         )
+        apu.reset()
         cpu.reset()
     }
 
@@ -40,7 +41,9 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
         bus.dma.initHdma()
         for (line in 0 until 262) {
             val target = cpu.cycles + CYCLES_PER_LINE
+            val before = cpu.cycles
             while (cpu.cycles < target && !cpu.stopped && !cpu.waiting) cpu.step()
+            apu.step((cpu.cycles - before).toInt()) // SPC700 anda junto com a CPU principal
             val enteredVBlank = ppu.stepScanline()
             if (ppu.scanline < 224) bus.dma.stepHdma()
             bus.inVBlank = ppu.scanline >= 225

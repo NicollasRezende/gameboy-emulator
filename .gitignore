@@ -40,3 +40,4 @@ bin/
 
 # Vetores ProcessorTests do 65816 (~138 MB, baixados localmente)
 /snes/src/test/resources/65816/
+/snes/src/test/resources/spc700/
