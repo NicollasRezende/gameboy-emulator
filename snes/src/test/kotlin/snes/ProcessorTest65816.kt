@@ -30,7 +30,7 @@ class ProcessorTest65816 {
         assumeTrue(dir != null && dir.isDirectory, "vetores /65816 ausentes (baixe de SingleStepTests/65816)")
         // MVN/MVP (44/54): block move — o modelo por-iteração dos SingleStepTests difere da
         // semântica padrão que usamos (move 1 byte + reexecuta). Implementados, fora da conformidade.
-        val excluded = setOf("44.e", "54.e")
+        val excluded = setOf("44.e", "54.e", "44.n", "54.n")
         val files = dir!!.listFiles { f -> f.extension == "json" && f.nameWithoutExtension !in excluded }
             ?.sortedBy { it.name } ?: emptyList()
         assumeTrue(files.isNotEmpty(), "nenhum vetor .json em /65816")

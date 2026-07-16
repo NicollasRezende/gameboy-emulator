@@ -79,6 +79,24 @@ fun main(args: Array<String>) {
         if (paletteName != null) (core as? GbCore)?.gameBoy?.ppu?.dmgPalette = DmgPalettes.byName(paletteName)
 
         val snesCore = core as? snes.SnesCore
+        if (snesCore != null && args.contains("--film")) {
+            // linha do tempo: imprime frames onde brilho ou nº de cores mudam, e salva alguns PNGs
+            var lastB = -1; var lastBucket = -1
+            val outBase = outPath.removeSuffix(".png")
+            for (fr in 1..frames) {
+                core.runFrame()
+                val b = snesCore.ppu.visibleBrightness()
+                val colors = core.framebuffer.toHashSet().size
+                val bucket = if (colors < 3) 0 else if (colors < 20) 1 else 2
+                if (b != lastB || bucket != lastBucket) {
+                    println("frame %4d: brilho=%2d cores=%d".format(fr, b, colors))
+                    writePng(core.framebuffer, "${outBase}_f$fr.png", scale = 4, core.width, core.height)
+                    lastB = b; lastBucket = bucket
+                }
+            }
+            println("── ${snesCore.debugInfo()} ──")
+            return
+        }
         if (snesCore != null && args.contains("--scanbright")) {
             // varre frame a frame e captura o de brilho máximo (achar a logo/conteúdo)
             var peakFrame = 0; var peakColors = -1
