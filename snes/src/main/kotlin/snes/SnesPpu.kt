@@ -62,16 +62,29 @@ class SnesPpu {
     // ---------- registradores (CPU $2100-$213F) ----------
     fun readReg(addr: Int): Int = when (addr and 0xFF) {
         0x38 -> { val v = oam[oamByte]; oamByte = (oamByte + 1) % 0x220; v }
-        0x39 -> { val v = vram[vmadd and 0x7FFF] and 0xFF; if (vmain and 0x80 == 0) vmadd = (vmadd + vramStep()) and 0x7FFF; v }
-        0x3A -> { val v = (vram[vmadd and 0x7FFF] shr 8) and 0xFF; if (vmain and 0x80 != 0) vmadd = (vmadd + vramStep()) and 0x7FFF; v }
+        0x39 -> { val v = vram[vramRemap()] and 0xFF; if (vmain and 0x80 == 0) vmadd = (vmadd + vramStep()) and 0x7FFF; v }
+        0x3A -> { val v = (vram[vramRemap()] shr 8) and 0xFF; if (vmain and 0x80 != 0) vmadd = (vmadd + vramStep()) and 0x7FFF; v }
         0x3B -> { val v = if (cgLatchHi) (cgram[cgadd and 0xFF] shr 8) and 0x7F else cgram[cgadd and 0xFF] and 0xFF
                   if (cgLatchHi) cgadd = (cgadd + 1) and 0xFF; cgLatchHi = !cgLatchHi; v }
         else -> 0
     }
 
-    private fun vramStep() = when (vmain and 0x03) { 0 -> 1; 1 -> 32; else -> 128 }
+    private fun vramStep() = when (vmain and 0x03) { 0 -> 1; 1 -> 32; 2 -> 128; else -> 128 }
 
-    fun debug() = "PPU: blank=%b bright=%d modo=%d TM=%02X".format(forcedBlank, brightness, bgMode and 0x07, mainScreen)
+    /** Remapeamento de endereço da VRAM (VMAIN bits 2-3): reordena os bits baixos para o
+     *  upload de gráficos de tile cair no layout certo. Sem isso, tiles carregam embaralhados. */
+    private fun vramRemap(): Int {
+        val a = vmadd
+        return when ((vmain shr 2) and 3) {
+            0 -> a
+            1 -> (a and 0xFF00) or ((a and 0x00E0) shr 5) or ((a and 0x001F) shl 3)
+            2 -> (a and 0xFE00) or ((a and 0x01C0) shr 6) or ((a and 0x003F) shl 3)
+            else -> (a and 0xFC00) or ((a and 0x0380) shr 7) or ((a and 0x007F) shl 3)
+        } and 0x7FFF
+    }
+
+    fun debug() = ("PPU: blank=%b bright=%d modo=%d TM=%02X | BG1 wide=%b big=%b hofs=%d vofs=%d")
+        .format(forcedBlank, brightness, bgMode and 0x07, mainScreen, bgSizeWide[0], bgSizeBig[0], bgHofs[0], bgVofs[0])
     fun visibleBrightness() = if (forcedBlank) 0 else brightness
 
     fun writeReg(addr: Int, value: Int) {
@@ -103,8 +116,8 @@ class SnesPpu {
             0x15 -> vmain = v
             0x16 -> vmadd = (vmadd and 0x7F00) or v
             0x17 -> vmadd = (vmadd and 0xFF) or ((v and 0x7F) shl 8)
-            0x18 -> { vram[vmadd and 0x7FFF] = (vram[vmadd and 0x7FFF] and 0xFF00) or v; if (vmain and 0x80 == 0) vmadd = (vmadd + vramStep()) and 0x7FFF }
-            0x19 -> { vram[vmadd and 0x7FFF] = (vram[vmadd and 0x7FFF] and 0xFF) or (v shl 8); if (vmain and 0x80 != 0) vmadd = (vmadd + vramStep()) and 0x7FFF }
+            0x18 -> { val a = vramRemap(); vram[a] = (vram[a] and 0xFF00) or v; if (vmain and 0x80 == 0) vmadd = (vmadd + vramStep()) and 0x7FFF }
+            0x19 -> { val a = vramRemap(); vram[a] = (vram[a] and 0xFF) or (v shl 8); if (vmain and 0x80 != 0) vmadd = (vmadd + vramStep()) and 0x7FFF }
             0x21 -> { cgadd = v; cgLatchHi = false }
             0x22 -> { if (!cgLatchHi) cgLatch = v else cgram[cgadd and 0xFF] = (v shl 8) or cgLatch
                       if (cgLatchHi) cgadd = (cgadd + 1) and 0xFF; cgLatchHi = !cgLatchHi }
@@ -239,14 +252,18 @@ class SnesPpu {
         val charBase = bgCharBase[bg]
         val widthTiles = if (bgSizeWide[bg]) 64 else 32
         val heightTiles = if (bgSizeBig[bg]) 64 else 32
+        // O tilemap envolve no SEU tamanho (256px p/ 32 tiles, 512px p/ 64). Sem isso, ao rolar
+        // a fase (hofs alto) tileX passa de 63 e o seletor de sub-mapa quebra → costura vertical.
+        val wMask = widthTiles * 8 - 1
+        val hMask = heightTiles * 8 - 1
         val mosN = ((mosaic shr 4) and 0x0F) + 1
         val mosOn = mosN > 1 && mosaic and (1 shl bg) != 0 // pixeliza em blocos NxN
-        val fy = ((if (mosOn) (y / mosN) * mosN else y) + vofs) and 0x7FF
+        val fy = ((if (mosOn) (y / mosN) * mosN else y) + vofs) and hMask
         val wordsPerTile = when (bpp) { 2 -> 8; 4 -> 16; else -> 32 } // 8bpp = 32 words
 
         for (x in 0 until 256) {
             if (masked(bg, x, winMask)) continue
-            val fx = ((if (mosOn) (x / mosN) * mosN else x) + hofs) and 0x7FF
+            val fx = ((if (mosOn) (x / mosN) * mosN else x) + hofs) and wMask
             val tileX = (fx shr 3); val tileY = (fy shr 3)
             // seleciona sub-mapa 32x32 (screens) conforme tamanho
             val scX = if (widthTiles == 64 && tileX >= 32) 1 else 0
