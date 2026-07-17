@@ -107,7 +107,7 @@ como interrupção não é um opcode, nenhum teste de CPU pegava — só o rastr
 - 🎮 **NES**: CPU 6502 validada instrução a instrução pelo `nestest.log`, PPU por scanline
   (scroll, sprites, sprite-0 hit), APU de 5 canais (incl. **DMC**), mappers NROM/MMC1/UNROM/CNROM/**MMC3**
   (com **IRQ de scanline** — o split de tela de SMB3, Mega Man e cia.).
-- 🟣 **SNES (beta)**: CPUs **65C816** e **SPC700** validadas contra os ProcessorTests, PPU
+- 🟣 **SNES**: CPUs **65C816** e **SPC700** validadas contra os ProcessorTests, PPU
   (**modos 0–4 + Mode 7, color math, janelas, mosaico, prioridade**), DMA/HDMA, **APU com SPC700 real** (IPL + handshake) e **DSP** (áudio: BRR, ADSR, mixagem). **Boota o Super Mario World** (tela de título) — e outros jogos que não dependam de timing ciclo-a-ciclo exato.
 - 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
@@ -150,7 +150,7 @@ GameBoy (scheduler: CPU → PPU/APU/timer a cada M-cycle)
 
 :api      interface EmulatorCore — o contrato que qualquer console implementa
 :nes      NES — CPU 6502 (nestest), PPU scanline, APU, mappers 0–4 (MMC3+IRQ)
-:snes     SNES — CPUs 65C816 + SPC700 (ProcessorTests), PPU completa (0-4/Mode7/blend/janela), DMA/HDMA, APU+DSP (beta)
+:snes     SNES — CPUs 65C816 + SPC700 (ProcessorTests), PPU completa (0-4/Mode7/blend/janela), DMA/HDMA, APU+DSP; roda o SMW
 :cli      runner (serial, trace, screenshot, save, paleta)
 :desktop  app multi-sistema (seletor de console, biblioteca, áudio, gamepad, save states…)
 homebrew/ CINZA — ROM autoral + artigo técnico

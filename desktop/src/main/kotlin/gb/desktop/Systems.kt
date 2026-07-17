@@ -30,7 +30,7 @@ object Systems {
         ),
         SystemDef(
             id = "snes",
-            name = "SNES (beta, sem áudio)",
+            name = "SNES",
             extensions = listOf("sfc", "smc"),
             width = 256,
             height = 224,

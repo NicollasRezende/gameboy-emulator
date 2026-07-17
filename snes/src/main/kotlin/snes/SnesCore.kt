@@ -4,9 +4,9 @@ import emu.Button
 import emu.EmulatorCore
 
 /**
- * Console SNES: liga CPU 65C816, PPU, DMA/HDMA, APU (stub) e controle, e implementa
+ * Console SNES: liga CPU 65C816, PPU, DMA/HDMA, APU (SPC700 + DSP) e controle, e implementa
  * [EmulatorCore]. Timing por scanline (NTSC, 262 linhas); NMI no início do VBlank (linha 225).
- * Sem áudio (APU real é o próximo milestone).
+ * Com áudio. Boota o Super Mario World.
  */
 class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     val cart = SnesCartridge(romBytes)

@@ -3,9 +3,8 @@ package snes
 /**
  * APU do SNES de verdade: SPC700 + 64 KiB de ARAM + a IPL boot ROM (64 bytes) + as 4 portas
  * de comunicação (com latches SEPARADOS para cada sentido) + os 3 timers + um banco de
- * registradores do DSP. Isto substitui o stub: o handshake de boot agora acontece de fato,
- * pois o SPC700 executa a IPL e o driver de som do jogo. A SÍNTESE de áudio do DSP ainda não
- * é feita (drainAudio vazio) — mas os jogos bootam e ligam o vídeo.
+ * DSP. O handshake de boot acontece de fato (o SPC700 executa a IPL e o driver de som do
+ * jogo) e o DSP sintetiza o áudio (via [drainAudio]).
  */
 class SnesApu : Bus700 {
     private val aram = IntArray(0x10000)
