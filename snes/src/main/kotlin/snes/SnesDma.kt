@@ -18,6 +18,9 @@ class SnesDma(
     }
     private val ch = Array(8) { Ch() }
     var hdmaEnable = 0
+    var log = false                       // diagnóstico dos canais HDMA (--dsp)
+    val chLog = ArrayDeque<String>()      // últimas configurações vistas em initHdma
+    private fun clog(s: String) { chLog.addLast(s); if (chLog.size > 24) chLog.removeFirst() }
 
     // padrões de transferência por modo (offsets no B-bus, 1 byte cada)
     private val patterns = arrayOf(
@@ -83,6 +86,8 @@ class SnesDma(
             c.tableAddr = c.a1t
             c.indirect = c.dmap and 0x40 != 0
             reloadLine(c)
+            if (log) clog("ch%d dmap=%02X bbad=%02X tab=%02X:%04X ind=%d indBank=%02X das=%04X lc=%02X"
+                .format(i, c.dmap, c.bbad, c.a1b, c.a1t, if (c.indirect) 1 else 0, c.indBank, c.das, c.lineCount))
         }
     }
 
@@ -115,9 +120,8 @@ class SnesDma(
             }
             c.lineCount--
             c.doTransfer = c.lineCount and 0x80 != 0 // modo "repeat" (bit 7)
-            val more = c.lineCount and 0x7F
-            if (more == 0 && c.lineCount and 0x80 == 0) {
-                // fim deste bloco: recarrega próxima entrada
+            if (c.lineCount and 0x7F == 0) {
+                // fim deste bloco (com ou sem repeat): recarrega a próxima entrada da tabela
                 if (readA((c.a1b shl 16) or (c.tableAddr and 0xFFFF)) != 0) reloadLine(c) else c.lineCount = 0
             }
         }
