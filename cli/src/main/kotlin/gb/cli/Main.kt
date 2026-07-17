@@ -79,6 +79,28 @@ fun main(args: Array<String>) {
         if (paletteName != null) (core as? GbCore)?.gameBoy?.ppu?.dmgPalette = DmgPalettes.byName(paletteName)
 
         val snesCore = core as? snes.SnesCore
+        val keysIdx = args.indexOf("--keys")
+        if (snesCore != null && keysIdx >= 0 && keysIdx + 1 < args.size) {
+            // formato: "botao:frameIni:frameFim,..." (ex.: "start:420:440,right:800:2000")
+            data class Hold(val b: emu.Button, val a: Int, val z: Int)
+            val holds = args[keysIdx + 1].split(",").mapNotNull {
+                val p = it.split(":"); if (p.size != 3) return@mapNotNull null
+                val b = when (p[0].lowercase()) {
+                    "up" -> emu.Button.UP; "down" -> emu.Button.DOWN; "left" -> emu.Button.LEFT; "right" -> emu.Button.RIGHT
+                    "a" -> emu.Button.A; "b" -> emu.Button.B; "x" -> emu.Button.X; "y" -> emu.Button.Y
+                    "l" -> emu.Button.L; "r" -> emu.Button.R; "start" -> emu.Button.START; "select" -> emu.Button.SELECT
+                    else -> return@mapNotNull null
+                }
+                Hold(b, p[1].toInt(), p[2].toInt())
+            }
+            for (fr in 1..frames) {
+                for (b in emu.Button.entries) core.setButton(b, holds.any { it.b == b && fr in it.a..it.z })
+                core.runFrame()
+            }
+            writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
+            println("── PNG (frame $frames, com input) em $outPath ── ${snesCore.debugInfo()}")
+            return
+        }
         if (snesCore != null && args.contains("--crash")) {
             snesCore.watchCrash = true
             for (fr in 1..frames) { core.runFrame(); if (snesCore.crashLog.isNotEmpty()) { println("── frame $fr: ${snesCore.crashLog} ──"); break } }
