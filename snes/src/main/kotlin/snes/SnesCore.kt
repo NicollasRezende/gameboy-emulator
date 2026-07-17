@@ -28,6 +28,8 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
             writeA = { addr, v -> bus.write(addr, v) },
         )
         bus.syncApu = ::syncApu
+        bus.irqAck = { cpu.irqLine = false } // ler $4211 baixa a linha de IRQ
+        bus.cpuCycle = { cpu.cycles }        // posição H p/ o bit HBlank do $4212
         apu.reset()
         cpu.reset()
     }
@@ -50,6 +52,8 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     override fun runFrame() {
         bus.dma.initHdma()
         for (line in 0 until 262) {
+            checkHvIrq(ppu.scanline) // IRQ H/V é avaliado antes da CPU rodar os ciclos da linha
+            bus.lineStartCycle = cpu.cycles // referência p/ a posição H (bit HBlank do $4212)
             val target = cpu.cycles + CYCLES_PER_LINE
             while (cpu.cycles < target && !cpu.stopped && !cpu.waiting) {
                 if (watchCrash && crashLog.isEmpty()) {
@@ -71,6 +75,19 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
                 if (bus.nmitimen and 0x80 != 0) { cpu.nmiPending = true; cpu.waiting = false }
             }
         }
+    }
+
+    /**
+     * IRQ H/V (NMITIMEN bits 4-5): 01 = a cada scanline (H==HTIME), 10 = na linha VTIME (H==0),
+     * 11 = na linha VTIME (H==HTIME). Modelo por scanline: aproxima o instante H para o início da
+     * linha. Assere a linha de IRQ; o jogo a limpa lendo $4211. Destrava splits de raster
+     * (barra de status, HUD do Mode 7, telas divididas).
+     */
+    private fun checkHvIrq(scanline: Int) {
+        val mode = (bus.nmitimen shr 4) and 3
+        if (mode == 0) return
+        val fire = if (mode == 1) true else scanline == bus.vtime
+        if (fire) { bus.timeUp = true; cpu.irqLine = true; cpu.waiting = false }
     }
 
     /** Diagnóstico do estado do console (usado pelo CLI para investigar boot). */

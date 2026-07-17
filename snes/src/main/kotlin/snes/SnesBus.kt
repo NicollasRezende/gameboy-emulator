@@ -24,6 +24,15 @@ class SnesBus(
     var inVBlank = false
     private var mdr = 0 // open bus
 
+    // IRQ H/V ($4207-$420A alvos de 9 bits; $4211 = flag TIMEUP). O SnesCore avalia a condição
+    // por scanline e assere cpu.irqLine; ler $4211 baixa a linha via irqAck().
+    var htime = 0x1FF; var vtime = 0x1FF; var timeUp = false
+    var irqAck: () -> Unit = {}
+
+    // posição H dentro da scanline para o bit HBlank do $4212 (handlers de IRQ fazem polling nele).
+    var lineStartCycle = 0L
+    var cpuCycle: () -> Long = { 0L }
+
     // multiplicação/divisão
     private var wrmpya = 0xFF; private var rdmpy = 0; private var rddiv = 0
     // joypad
@@ -91,8 +100,11 @@ class SnesBus(
     private fun regReadCpu(a: Int): Int { regReadHist[a]++; return regReadCpu0(a) }
     private fun regReadCpu0(a: Int): Int = when {
         a == 0x4210 -> (if (nmiFlag) 0x80 else 0).also { nmiFlag = false } or 0x02 // RDNMI (+versão 2)
-        a == 0x4211 -> 0            // TIMEUP (IRQ de timer não implementado)
-        a == 0x4212 -> (if (inVBlank) 0x80 else 0)                // HVBJOY
+        a == 0x4211 -> (if (timeUp) 0x80 else 0).also { timeUp = false; irqAck() } // TIMEUP (limpa e baixa o IRQ)
+        a == 0x4212 -> {                                          // HVBJOY: bit7=VBlank, bit6=HBlank
+            val h = cpuCycle() - lineStartCycle                    // 0..~227 dentro da linha
+            (if (inVBlank) 0x80 else 0) or (if (h >= 187) 0x40 else 0)
+        }
         a == 0x4214 -> rddiv and 0xFF; a == 0x4215 -> (rddiv shr 8) and 0xFF
         a == 0x4216 -> rdmpy and 0xFF; a == 0x4217 -> (rdmpy shr 8) and 0xFF
         a == 0x4218 -> joy1 and 0xFF; a == 0x4219 -> (joy1 shr 8) and 0xFF
@@ -113,6 +125,10 @@ class SnesBus(
                 if (v == 0) { rddiv = 0xFFFF; rdmpy = dividend }
                 else { val q = dividend / v; val r = dividend % v; rddiv = q and 0xFFFF; rdmpy = r and 0xFFFF }
             }
+            a == 0x4207 -> htime = (htime and 0x100) or v         // HTIME baixo
+            a == 0x4208 -> htime = (htime and 0xFF) or ((v and 1) shl 8) // HTIME bit 8
+            a == 0x4209 -> vtime = (vtime and 0x100) or v         // VTIME baixo
+            a == 0x420A -> vtime = (vtime and 0xFF) or ((v and 1) shl 8) // VTIME bit 8
             a == 0x420B -> dma.runGdma(v)                         // MDMAEN
             a == 0x420C -> dma.hdmaEnable = v                     // HDMAEN
             a in 0x4300..0x437F -> dma.writeReg(a and 0xFF, v)
@@ -123,10 +139,12 @@ class SnesBus(
         for (b in wram) o.writeByte(b)
         o.writeInt(nmitimen); o.writeBoolean(nmiFlag); o.writeInt(wrmpya); o.writeInt(rdmpy)
         o.writeInt(rddiv); o.writeInt(joy1); o.writeInt(wramPort)
+        o.writeInt(htime); o.writeInt(vtime); o.writeBoolean(timeUp)
     }
     internal fun loadState(i: java.io.DataInputStream) {
         for (j in wram.indices) wram[j] = i.readUnsignedByte()
         nmitimen = i.readInt(); nmiFlag = i.readBoolean(); wrmpya = i.readInt(); rdmpy = i.readInt()
         rddiv = i.readInt(); joy1 = i.readInt(); wramPort = i.readInt()
+        htime = i.readInt(); vtime = i.readInt(); timeUp = i.readBoolean()
     }
 }
