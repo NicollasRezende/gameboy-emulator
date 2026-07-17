@@ -101,6 +101,20 @@ fun main(args: Array<String>) {
             println("── PNG (frame $frames, com input) em $outPath ── ${snesCore.debugInfo()}")
             return
         }
+        if (snesCore != null && args.contains("--dsp")) {
+            // liga o logging do DSP-1 e imprime os comandos emitidos (guia da implementação)
+            snesCore.bus.dsp1?.log = true
+            repeat(frames) { core.runFrame() }
+            writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
+            val d = snesCore.bus.dsp1
+            if (d == null) println("── cartucho SEM DSP-1 (cart.hasDsp1=false) ──")
+            else {
+                println("── ${d.debug()} ──")
+                println("── primeiras transações DSP-1 (cmd + bytes de entrada) ──")
+                d.transLog.forEach { println("  $it") }
+            }
+            return
+        }
         if (snesCore != null && args.contains("--crash")) {
             snesCore.watchCrash = true
             for (fr in 1..frames) { core.runFrame(); if (snesCore.crashLog.isNotEmpty()) { println("── frame $fr: ${snesCore.crashLog} ──"); break } }

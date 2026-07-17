@@ -13,10 +13,21 @@ class SnesBus(
 ) : Bus65816 {
     val wram = IntArray(0x20000)
     lateinit var dma: SnesDma
-    var dsp1: SnesDsp1? = null // coprocessador DSP-1 (mapeado em $20-$3F/$A0-$BF:$8000-$FFFF, LoROM)
+    var dsp1: SnesDsp1? = null // coprocessador DSP-1 (mapeamento depende de LoROM/HiROM)
 
-    /** Endereço do DSP-1 (LoROM): bancos $20-$3F e espelho $A0-$BF, a partir de $8000. */
-    private fun isDspAddr(bank: Int, a: Int) = dsp1 != null && (bank and 0x7F) in 0x20..0x3F && a >= 0x8000
+    /**
+     * Porta do DSP-1 no endereço dado: 0 = não é DSP, 1 = registrador de dados (DR),
+     * 2 = registrador de status (SR). LoROM: $20-$3F/$A0-$BF:$8000-$BFFF=DR, $C000+=SR.
+     * HiROM: $00-$1F/$80-$9F:$6000-$6FFF=DR, $7000-$7FFF=SR (a SRAM HiROM fica em $20-$3F).
+     */
+    private fun dspPort(bank: Int, a: Int): Int {
+        if (dsp1 == null) return 0
+        val b = bank and 0x7F
+        return when (cart.map) {
+            SnesMap.LOROM -> if (b in 0x20..0x3F && a >= 0x8000) (if (a >= 0xC000) 2 else 1) else 0
+            SnesMap.HIROM -> if (b in 0x00..0x1F && a in 0x6000..0x7FFF) (if (a >= 0x7000) 2 else 1) else 0
+        }
+    }
 
     /** Traz o SPC700 até o ciclo atual — chamado antes de cada acesso às portas do APU
      *  (sincronismo fino, essencial para o handshake do driver de som não dessincronizar). */
@@ -61,7 +72,8 @@ class SnesBus(
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a < 0x2000 -> wram[a]
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x2100..0x21FF -> regReadB(a)
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x4000..0x43FF -> regReadCpu(a)
-            isDspAddr(bank, a) -> if (a >= 0xC000) dsp1!!.readSR() else dsp1!!.readDR()
+            dspPort(bank, a) == 2 -> dsp1!!.readSR()
+            dspPort(bank, a) == 1 -> dsp1!!.readDR()
             else -> cart.read(bank, a).let { if (it < 0) mdr else it }
         }
         mdr = v and 0xFF
@@ -77,7 +89,7 @@ class SnesBus(
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a < 0x2000 -> wram[a] = v
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x2100..0x21FF -> regWriteB(a, v)
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x4000..0x43FF -> regWriteCpu(a, v)
-            isDspAddr(bank, a) && a < 0xC000 -> dsp1!!.writeDR(v) // DR grava; SR é só leitura
+            dspPort(bank, a) == 1 -> dsp1!!.writeDR(v) // DR grava; SR é só leitura
             else -> cart.write(bank, a, v)
         }
     }
