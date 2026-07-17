@@ -26,6 +26,7 @@ class SnesDsp1 {
     var log = false
     val cmdHist = IntArray(0x100)
     val transLog = ArrayList<String>()
+    val rawLog = ArrayList<String>() // fluxo cru de W/R (revela o enquadramento real dos comandos)
 
     /** SR: bit 7 (RQM) sempre pronto — a CPU nunca trava esperando o chip. */
     fun readSR(): Int = 0x80
@@ -35,6 +36,7 @@ class SnesDsp1 {
         if (!reading) { process(); reading = true; outIdx = 0 }
         val v = if (outIdx < outBuf.size) outBuf[outIdx] else 0
         outIdx++
+        if (log && rawLog.size < 200) rawLog.add("R %02X".format(v and 0xFF))
         return v and 0xFF
     }
 
@@ -42,6 +44,7 @@ class SnesDsp1 {
     fun writeDR(v: Int) {
         if (reading) { reading = false; inBuf.clear() }
         inBuf.add(v and 0xFF)
+        if (log && rawLog.size < 200) rawLog.add("W %02X".format(v and 0xFF))
     }
 
     // ---- palavras de 16 bits (little-endian) a partir do buffer de entrada; params[0] após o cmd

@@ -111,7 +111,9 @@ fun main(args: Array<String>) {
             else {
                 println("── ${d.debug()} ──")
                 println("── primeiras transações DSP-1 (cmd + bytes de entrada) ──")
-                d.transLog.forEach { println("  $it") }
+                d.transLog.take(6).forEach { println("  $it") }
+                println("── fluxo cru W/R (enquadramento real) ──")
+                println("  " + d.rawLog.joinToString(" "))
             }
             return
         }
