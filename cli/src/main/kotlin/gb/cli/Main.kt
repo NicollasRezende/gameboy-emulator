@@ -79,6 +79,26 @@ fun main(args: Array<String>) {
         if (paletteName != null) (core as? GbCore)?.gameBoy?.ppu?.dmgPalette = DmgPalettes.byName(paletteName)
 
         val snesCore = core as? snes.SnesCore
+        if (snesCore != null && args.contains("--crash")) {
+            snesCore.watchCrash = true
+            for (fr in 1..frames) { core.runFrame(); if (snesCore.crashLog.isNotEmpty()) { println("── frame $fr: ${snesCore.crashLog} ──"); break } }
+            if (snesCore.crashLog.isEmpty()) println("── nenhum salto para open-bus em $frames frames ──")
+            println("── ${snesCore.debugInfo()} ──")
+            return
+        }
+        if (snesCore != null && args.contains("--ports")) {
+            // registra as transações de porta APU (handshake) durante os últimos frames
+            repeat((frames - 30).coerceAtLeast(0)) { core.runFrame() }
+            snesCore.apu.logPorts = true
+            snesCore.bus.regReadHist.fill(0) // zera pra medir só os últimos frames
+            repeat(30) { core.runFrame() }
+            println("── Transações de porta APU (últimos 30 frames, transições) ──")
+            snesCore.apu.portLog.take(16).forEach { println("  $it") }
+            println("── Registradores mais lidos pelo MAIN nos últimos 30 frames ──")
+            println("  ${snesCore.bus.topRegReads(10)}")
+            println("── ${snesCore.debugInfo()} ──")
+            return
+        }
         if (snesCore != null && args.contains("--film")) {
             // linha do tempo: imprime frames onde brilho ou nº de cores mudam, e salva alguns PNGs
             var lastB = -1; var lastBucket = -1

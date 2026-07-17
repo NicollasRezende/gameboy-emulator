@@ -44,11 +44,23 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     override val fps = 60.0988
     override val framebuffer: IntArray get() = ppu.framebuffer
 
+    var watchCrash = false
+    var crashLog = ""
+    private val trail = ArrayDeque<String>()
     override fun runFrame() {
         bus.dma.initHdma()
         for (line in 0 until 262) {
             val target = cpu.cycles + CYCLES_PER_LINE
-            while (cpu.cycles < target && !cpu.stopped && !cpu.waiting) cpu.step()
+            while (cpu.cycles < target && !cpu.stopped && !cpu.waiting) {
+                if (watchCrash && crashLog.isEmpty()) {
+                    val from = (cpu.pbr shl 16) or cpu.pc
+                    val op = bus.read(from)
+                    cpu.step()
+                    trail.addLast("%06X op=%02X A=%04X X=%04X Y=%04X P=%02X D=%04X DBR=%02X ea=%06X".format(from, op, cpu.a, cpu.x, cpu.y, cpu.p, cpu.d, cpu.dbr, cpu.lastEA))
+                    if (trail.size > 160) trail.removeFirst()
+                    if (op == 0x00 && crashLog.isEmpty()) crashLog = trail.joinToString("\n  ")
+                } else cpu.step()
+            }
             syncApu() // mantém o SPC700 em dia a cada scanline (e nos acessos às portas)
             if (ppu.scanline < 224) bus.dma.stepHdma() // HDMA prepara os registradores ANTES do render (ex.: matriz Mode 7)
             val enteredVBlank = ppu.stepScanline()

@@ -82,11 +82,19 @@ verdade (o filtro de scanlines está ligado na captura).</sub>
 
 <br><br>
 
+<img src="screenshots/snes-smw.png" width="560" alt="Super Mario World rodando no core SNES">
+
+<sub><b>Super Mario World</b> (SNES) rodando no emulador — a tela de título completa, bootada
+a partir do cartucho comercial: CPU 65C816, SPC700 fazendo o upload do driver de som, PPU e a
+cadeia toda. O bug que a segurava era sutil (a interrupção nativa empurrava o status sem o flag X);
+como interrupção não é um opcode, nenhum teste de CPU pegava — só o rastreamento do crash.</sub>
+
+<br><br>
+
 <img src="screenshots/snes-8bpp.png" width="270" alt="SNES background 8bpp"> <img src="screenshots/snes-mode7.png" width="270" alt="SNES Mode 7 (afim)"> <img src="screenshots/snes-colormath.png" width="270" alt="SNES color math (blend)">
 
-<sub><b>SNES (beta)</b> — a PPU renderizando contra as ROMs de teste do PeterLemon: BG <b>8bpp</b>
-(modo 3, 256 cores); <b>Mode 7</b> (transformação afim — a pista girada, como F-Zero/Mario Kart);
-e <b>color math</b> (blend de duas camadas → gradiente de 3840 cores). Cadeia <b>CPU 65C816 → DMA → VRAM → PPU</b> completa.</sub>
+<sub>A PPU do SNES contra as ROMs de teste do PeterLemon: BG <b>8bpp</b> (modo 3, 256 cores);
+<b>Mode 7</b> (transformação afim, como F-Zero/Mario Kart); e <b>color math</b> (blend → gradiente de 3840 cores).</sub>
 
 </div>
 
@@ -100,7 +108,7 @@ e <b>color math</b> (blend de duas camadas → gradiente de 3840 cores). Cadeia 
   (scroll, sprites, sprite-0 hit), APU de 5 canais (incl. **DMC**), mappers NROM/MMC1/UNROM/CNROM/**MMC3**
   (com **IRQ de scanline** — o split de tela de SMB3, Mega Man e cia.).
 - 🟣 **SNES (beta)**: CPUs **65C816** e **SPC700** validadas contra os ProcessorTests, PPU
-  (**modos 0–4 + Mode 7, color math, janelas, mosaico, prioridade**), DMA/HDMA, **APU com SPC700 real** (IPL + handshake) e **DSP** (áudio: BRR, ADSR, mixagem). Roda ROMs de teste e homebrew; jogos comerciais mais exigentes ainda dependem de timing ciclo-a-ciclo.
+  (**modos 0–4 + Mode 7, color math, janelas, mosaico, prioridade**), DMA/HDMA, **APU com SPC700 real** (IPL + handshake) e **DSP** (áudio: BRR, ADSR, mixagem). **Boota o Super Mario World** (tela de título) — e outros jogos que não dependam de timing ciclo-a-ciclo exato.
 - 🕹️ **App desktop multi-sistema**: seletor de console, biblioteca de ROMs, velocidade 0.25×–8× + turbo, tela cheia, filtros, paletas, cheats e gamepad.
 - 🎨 **Cores autênticas por padrão** — filtros e correção de cor existem, mas nascem desligados.
 - ✅ **641 testes automatizados** — Blargg, dmg/cgb-acid2, mooneye, nestest e ProcessorTests (65C816 + SPC700).
@@ -197,7 +205,8 @@ ROM autoral, livre, pronta para jogar.
   - [x] **CPU SPC700** — o processador de som, validada contra os ProcessorTests (256 opcodes) + IPL boot ROM e handshake real das portas (jogos comerciais fazem o upload do driver de som e passam do boot do APU)
   - [x] **PPU completa** — modos 0–4 + Mode 7 (afim), 2/4/8bpp, color math, janelas, mosaico e composição por **prioridade** de BG/sprites — validada contra as ROMs de teste do PeterLemon
   - [x] **DSP** — síntese de áudio: 8 vozes, decode BRR, envelope ADSR/GAIN, mixagem estéreo (32 kHz → 48 kHz)
-  - [ ] **Timing ciclo-a-ciclo** (CPU + APU) — o que falta para os jogos comerciais mais exigentes (ex.: Super Mario World) completarem o boot; hoje o SNES roda ROMs de teste e homebrew
+  - [x] **Boota o Super Mario World** — tela de título, a partir do cartucho comercial (fix: interrupção nativa preservando o flag X)
+  - [ ] **Timing ciclo-a-ciclo** — para os jogos mais sensíveis a timing e para efeitos de raster mais precisos
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
 

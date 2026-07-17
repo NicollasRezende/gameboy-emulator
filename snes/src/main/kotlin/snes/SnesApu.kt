@@ -48,9 +48,18 @@ class SnesApu : Bus700 {
 
     fun reset() { cpu.reset() }
 
+    // log de transações de porta (diagnóstico do handshake) — ring buffer só das mudanças
+    var logPorts = false
+    val portLog = ArrayList<String>()
+    private fun logEv(s: String) { // deduplica polls idênticos consecutivos (só mostra transições)
+        if (!logPorts) return
+        if (portLog.isNotEmpty() && portLog.last() == s) return
+        portLog.add(s); if (portLog.size > 80) portLog.removeAt(0)
+    }
+
     // ---------- lado da CPU principal ($2140-$2143) ----------
-    fun readPort(port: Int): Int { reads++; return spcToMain[port and 3] }
-    fun writePort(port: Int, value: Int) { writes++; mainToSpc[port and 3] = value and 0xFF }
+    fun readPort(port: Int): Int { reads++; val v = spcToMain[port and 3]; logEv("main R p${port and 3}=%02X".format(v)); return v }
+    fun writePort(port: Int, value: Int) { writes++; mainToSpc[port and 3] = value and 0xFF; logEv("main W p${port and 3}=%02X".format(value and 0xFF)) }
 
     fun debug(): String {
         val top = spcRegReads.withIndex().filter { it.value > 0 }.sortedByDescending { it.value }.take(4)
@@ -130,7 +139,7 @@ class SnesApu : Bus700 {
     private fun regRead(a: Int): Int = when (a.also { spcRegReads[it and 0xFF]++ }) {
         0xF2 -> dspAddr
         0xF3 -> dsp.readReg(dspAddr)
-        0xF4, 0xF5, 0xF6, 0xF7 -> mainToSpc[a - 0xF4]
+        0xF4, 0xF5, 0xF6, 0xF7 -> mainToSpc[a - 0xF4].also { logEv("spc  R p${a - 0xF4}=%02X".format(it)) }
         0xFD, 0xFE, 0xFF -> { val v = timerOut[a - 0xFD]; timerOut[a - 0xFD] = 0; v } // 4-bit, limpa na leitura
         else -> aram[a]
     }
@@ -149,7 +158,7 @@ class SnesApu : Bus700 {
             }
             0xF2 -> dspAddr = v
             0xF3 -> if (dspAddr < 0x80) dsp.writeReg(dspAddr, v)
-            0xF4, 0xF5, 0xF6, 0xF7 -> spcToMain[a - 0xF4] = v
+            0xF4, 0xF5, 0xF6, 0xF7 -> { spcToMain[a - 0xF4] = v; logEv("spc  W p${a - 0xF4}=%02X".format(v)) }
             0xFA, 0xFB, 0xFC -> timerTarget[a - 0xFA] = v
             else -> aram[a] = v
         }

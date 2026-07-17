@@ -44,8 +44,9 @@ class Cpu65816(private val bus: Bus65816) {
     }
     private fun read16(addr: Int): Int = read8(addr) or (read8(hiAddr(addr)) shl 8)
     private fun write16(addr: Int, v: Int) { write8(addr, v and 0xFF); write8(hiAddr(addr), (v shr 8) and 0xFF) }
-    private fun readW(addr: Int, wide: Boolean) = if (wide) read16(addr) else read8(addr)
-    private fun writeW(addr: Int, v: Int, wide: Boolean) { if (wide) write16(addr, v) else write8(addr, v) }
+    var lastEA = 0 // diagnóstico: último endereço efetivo de operando
+    private fun readW(addr: Int, wide: Boolean): Int { lastEA = addr; return if (wide) read16(addr) else read8(addr) }
+    private fun writeW(addr: Int, v: Int, wide: Boolean) { lastEA = addr; if (wide) write16(addr, v) else write8(addr, v) }
 
     private fun fetch(): Int { val v = read8((pbr shl 16) or pc); pc = (pc + 1) and 0xFFFF; return v }
     private fun fetch16(): Int { val lo = fetch(); return lo or (fetch() shl 8) }
@@ -227,7 +228,9 @@ class Cpu65816(private val bus: Bus65816) {
 
     // ---------- interrupções ----------
     private fun interrupt(vecNative: Int, vecEmu: Int, brk: Boolean) {
-        if (!e) { push8(pbr); push16(pc); push8(if (brk) p else p and 0x10.inv()) }
+        // Nativo: empurra o P completo (bit 4 = flag X, largura do índice). Só a emulação
+        // mexe no bit 4 (flag B): BRK empurra com B=1, IRQ/NMI com B=0.
+        if (!e) { push8(pbr); push16(pc); push8(p) }
         else { push16(pc); push8(if (brk) p or 0x10 else p and 0x10.inv()) }
         flag(I, true); flag(D, false); pbr = 0
         pc = read8(if (e) vecEmu else vecNative) or (read8((if (e) vecEmu else vecNative) + 1) shl 8)
