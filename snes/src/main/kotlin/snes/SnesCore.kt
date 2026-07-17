@@ -30,6 +30,7 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
         bus.syncApu = ::syncApu
         bus.irqAck = { cpu.irqLine = false } // ler $4211 baixa a linha de IRQ
         bus.cpuCycle = { cpu.cycles }        // posição H p/ o bit HBlank do $4212
+        if (cart.hasDsp1) bus.dsp1 = SnesDsp1() // coprocessador DSP-1 (Super Mario Kart, Pilotwings)
         apu.reset()
         cpu.reset()
     }
@@ -93,7 +94,8 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     /** Diagnóstico do estado do console (usado pelo CLI para investigar boot). */
     fun debugInfo(): String {
         val mode = if (cpu.e) "emu" else "nat"
-        return "CPU: %02X:%04X modo=%s | %s | %s | nmitimen=%02X\n  top-reads: %s"
+        val dsp = bus.dsp1?.let { " | " + it.debug() } ?: ""
+        return "CPU: %02X:%04X modo=%s | %s | %s | nmitimen=%02X$dsp\n  top-reads: %s"
             .format(cpu.pbr, cpu.pc, mode, ppu.debug(), apu.debug(), bus.nmitimen, bus.topRegReads(8))
     }
 

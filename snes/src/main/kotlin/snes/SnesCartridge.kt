@@ -14,6 +14,7 @@ class SnesCartridge(raw: IntArray) {
     val map: SnesMap
     val title: String
     val hasBattery: Boolean
+    val hasDsp1: Boolean // coprocessador DSP-1 (Super Mario Kart, Pilotwings, ...)
 
     init {
         // .smc: cabeçalho de 512 bytes se o tamanho for múltiplo de 1024 + 512
@@ -29,6 +30,10 @@ class SnesCartridge(raw: IntArray) {
         val sramSize = if (ramSizeByte in 1..9) 1 shl (10 + ramSizeByte) else 0
         val romType = rom.getOrElse(base + 0x16) { 0 }
         hasBattery = romType == 0x02 || romType == 0x05
+        // tipo com coprocessador (0x03/0x04/0x05) + subtipo DSP (nibble alto do byte $xxD5 = 0).
+        // Só o DSP-1 é implementado; outros coprocessadores (SuperFX/SA-1) não rodam de qualquer forma.
+        val mode = rom.getOrElse(base + 0x15) { 0 }
+        hasDsp1 = romType in intArrayOf(0x03, 0x04, 0x05) && (mode and 0xF0) == 0x20
         sram = IntArray(if (sramSize > 0) sramSize else 0x8000)
     }
 

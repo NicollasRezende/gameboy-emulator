@@ -13,6 +13,10 @@ class SnesBus(
 ) : Bus65816 {
     val wram = IntArray(0x20000)
     lateinit var dma: SnesDma
+    var dsp1: SnesDsp1? = null // coprocessador DSP-1 (mapeado em $20-$3F/$A0-$BF:$8000-$FFFF, LoROM)
+
+    /** Endereço do DSP-1 (LoROM): bancos $20-$3F e espelho $A0-$BF, a partir de $8000. */
+    private fun isDspAddr(bank: Int, a: Int) = dsp1 != null && (bank and 0x7F) in 0x20..0x3F && a >= 0x8000
 
     /** Traz o SPC700 até o ciclo atual — chamado antes de cada acesso às portas do APU
      *  (sincronismo fino, essencial para o handshake do driver de som não dessincronizar). */
@@ -57,6 +61,7 @@ class SnesBus(
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a < 0x2000 -> wram[a]
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x2100..0x21FF -> regReadB(a)
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x4000..0x43FF -> regReadCpu(a)
+            isDspAddr(bank, a) -> if (a >= 0xC000) dsp1!!.readSR() else dsp1!!.readDR()
             else -> cart.read(bank, a).let { if (it < 0) mdr else it }
         }
         mdr = v and 0xFF
@@ -72,6 +77,7 @@ class SnesBus(
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a < 0x2000 -> wram[a] = v
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x2100..0x21FF -> regWriteB(a, v)
             (bank <= 0x3F || (bank in 0x80..0xBF)) && a in 0x4000..0x43FF -> regWriteCpu(a, v)
+            isDspAddr(bank, a) && a < 0xC000 -> dsp1!!.writeDR(v) // DR grava; SR é só leitura
             else -> cart.write(bank, a, v)
         }
     }
