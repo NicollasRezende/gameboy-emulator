@@ -205,7 +205,9 @@ ROM autoral, livre, pronta para jogar.
   - [x] **CPU SPC700** — o processador de som, validada contra os ProcessorTests (256 opcodes) + IPL boot ROM e handshake real das portas (jogos comerciais fazem o upload do driver de som e passam do boot do APU)
   - [x] **PPU completa** — modos 0–4 + Mode 7 (afim), 2/4/8bpp, color math, janelas, mosaico e composição por **prioridade** de BG/sprites — validada contra as ROMs de teste do PeterLemon
   - [x] **DSP** — síntese de áudio: 8 vozes, decode BRR, envelope ADSR/GAIN, mixagem estéreo (32 kHz → 48 kHz)
-  - [x] **Boota o Super Mario World** — tela de título, a partir do cartucho comercial (fix: interrupção nativa preservando o flag X)
+  - [x] **Roda o Super Mario World** — do cartucho comercial: title, overworld e as fases (fix da interrupção nativa preservando o flag X + wrap de tilemap de 64 tiles que cortava o cenário)
+  - [x] **IRQ de contador H/V** — `$4200`/HTIME/VTIME/`$4211` + bit HBlank do `$4212`; destrava os splits de raster
+  - [x] **Roda o Zelda: A Link to the Past** — passa do título e roda a intro (prólogo) e os menus (registro de nome, seleção de arquivo), do cartucho comercial
   - [ ] **Timing ciclo-a-ciclo** — para os jogos mais sensíveis a timing e para efeitos de raster mais precisos
 - [ ] **N64** — pesquisa de longo prazo (MIPS + RSP; sem promessa de data)
 - [ ] Cheat scanner · suporte a boot ROM · bits-exatos do MBC1
