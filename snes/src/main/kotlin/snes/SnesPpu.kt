@@ -38,6 +38,8 @@ class SnesPpu {
     private var m7a = 0; private var m7b = 0; private var m7c = 0; private var m7d = 0
     private var m7x = 0; private var m7y = 0; private var m7hofs = 0; private var m7vofs = 0
     private var m7sel = 0; private var m7latch = 0
+    var m7Log = false                        // liga o diagnóstico das linhas Mode 7 (--dsp)
+    val m7LineLog = ArrayDeque<String>()     // últimas amostras dos registradores M7 por linha
 
     // color math (blending main/sub) e cor fixa
     private var cgwsel = 0; private var cgadsub = 0
@@ -300,6 +302,11 @@ class SnesPpu {
      */
     private fun renderMode7(y: Int, col: IntArray, lay: IntArray, pri: IntArray) {
         val a = s16(m7a); val b = s16(m7b); val c = s16(m7c); val d = s16(m7d)
+        if (m7Log && (y == 40 || y == 90)) { // diagnóstico: o que o jogo programou nessas linhas
+            m7LineLog.addLast("y=%d A=%04X B=%04X C=%04X D=%04X X=%04X Y=%04X HOFS=%04X VOFS=%04X SEL=%02X"
+                .format(y, m7a, m7b, m7c, m7d, m7x, m7y, m7hofs, m7vofs, m7sel))
+            if (m7LineLog.size > 12) m7LineLog.removeFirst()
+        }
         val cx = s13(m7x); val cy = s13(m7y)
         val lx = s13(m7hofs - cx); val ly = s13(m7vofs - cy)
         val baseX = a * lx + b * ly + b * y + (cx shl 8)

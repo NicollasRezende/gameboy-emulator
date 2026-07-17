@@ -104,16 +104,24 @@ fun main(args: Array<String>) {
         if (snesCore != null && args.contains("--dsp")) {
             // liga o logging do DSP-1 e imprime os comandos emitidos (guia da implementação)
             snesCore.bus.dsp1?.log = true
+            snesCore.ppu.m7Log = true
+            snesCore.bus.dma.log = true
             repeat(frames) { core.runFrame() }
             writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
             val d = snesCore.bus.dsp1
             if (d == null) println("── cartucho SEM DSP-1 (cart.hasDsp1=false) ──")
             else {
                 println("── ${d.debug()} ──")
-                println("── primeiras transações DSP-1 (cmd + bytes de entrada) ──")
-                d.transLog.take(6).forEach { println("  $it") }
-                println("── fluxo cru W/R (enquadramento real) ──")
-                println("  " + d.rawLog.joinToString(" "))
+                println("── história dos rasters (todos os Op01/Op0A) ──")
+                d.setupLog.forEach { println("  $it") }
+                println("── últimas transações DSP-1 (enquadradas por comando) ──")
+                d.transLog.forEach { println("  $it") }
+                println("── registradores Mode 7 programados pelo jogo (últimas linhas) ──")
+                snesCore.ppu.m7LineLog.forEach { println("  $it") }
+                println("── canais HDMA (últimos initHdma) ──")
+                snesCore.bus.dma.chLog.forEach { println("  $it") }
+                println("── fluxo cru W/R (cauda, enquadramento real) ──")
+                println("  " + d.rawLog.toList().takeLast(1400).joinToString(" "))
             }
             return
         }
