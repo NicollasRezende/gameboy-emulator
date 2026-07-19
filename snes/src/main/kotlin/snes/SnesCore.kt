@@ -50,6 +50,10 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     var watchCrash = false
     var crashLog = ""
     private val trail = ArrayDeque<String>()
+    var samplePc = false                       // diagnóstico: amostra PC por instrução (achar loops)
+    val pcHist = HashMap<Int, Int>()
+    val irqScanHist = HashMap<Int, Int>()      // diagnóstico: scanlines onde o IRQ foi processado
+    init { cpu.onIrq = { if (samplePc) { val s = ppu.scanline; irqScanHist[s] = (irqScanHist[s] ?: 0) + 1 } } }
     override fun runFrame() {
         bus.dma.initHdma()
         for (line in 0 until 262) {
@@ -57,6 +61,7 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
             bus.lineStartCycle = cpu.cycles // referência p/ a posição H (bit HBlank do $4212)
             val target = cpu.cycles + CYCLES_PER_LINE
             while (cpu.cycles < target && !cpu.stopped && !cpu.waiting) {
+                if (samplePc) { val k = (cpu.pbr shl 16) or cpu.pc; pcHist[k] = (pcHist[k] ?: 0) + 1 }
                 if (watchCrash && crashLog.isEmpty()) {
                     val from = (cpu.pbr shl 16) or cpu.pc
                     val op = bus.read(from)
@@ -95,7 +100,8 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
     fun debugInfo(): String {
         val mode = if (cpu.e) "emu" else "nat"
         val dsp = bus.dsp1?.let { " | " + it.debug() } ?: ""
-        return "CPU: %02X:%04X modo=%s | %s | %s | nmitimen=%02X$dsp\n  top-reads: %s"
+        val irq = "irqMode=%d HTIME=%d VTIME=%d".format((bus.nmitimen shr 4) and 3, bus.htime, bus.vtime)
+        return "CPU: %02X:%04X modo=%s | %s | %s | nmitimen=%02X $irq$dsp\n  top-reads: %s"
             .format(cpu.pbr, cpu.pc, mode, ppu.debug(), apu.debug(), bus.nmitimen, bus.topRegReads(8))
     }
 

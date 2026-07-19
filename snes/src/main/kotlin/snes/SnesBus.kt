@@ -57,6 +57,9 @@ class SnesBus(
 
     // diagnóstico: histograma de leituras de registradores (achar loops de polling)
     val regReadHist = LongArray(0x10000)
+    var watchWram = -1                  // offset de WRAM baixa a vigiar em escritas (-1 = off)
+    var pcProbe: () -> Int = { 0 }      // PC atual, para atribuir a escrita vigiada
+    val watchLog = ArrayDeque<String>()
 
     fun topRegReads(n: Int): String = regReadHist.withIndex().filter { it.value > 0 }
         .sortedByDescending { it.value }.take(n)
@@ -83,6 +86,8 @@ class SnesBus(
     override fun write(addr: Int, value: Int) {
         val bank = (addr shr 16) and 0xFF; val a = addr and 0xFFFF; val v = value and 0xFF
         mdr = v
+        if (watchWram >= 0 && a == watchWram && watchLog.size < 60)
+            watchLog.addLast("PC=%06X L%d escreve $%04X = %02X".format(pcProbe(), ppu.scanline, a, v))
         when {
             bank == 0x7E -> wram[a] = v
             bank == 0x7F -> wram[0x10000 + a] = v

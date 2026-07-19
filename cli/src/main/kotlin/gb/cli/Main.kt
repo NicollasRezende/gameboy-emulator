@@ -80,23 +80,64 @@ fun main(args: Array<String>) {
 
         val snesCore = core as? snes.SnesCore
         val keysIdx = args.indexOf("--keys")
-        if (snesCore != null && keysIdx >= 0 && keysIdx + 1 < args.size) {
-            // formato: "botao:frameIni:frameFim,..." (ex.: "start:420:440,right:800:2000")
-            data class Hold(val b: emu.Button, val a: Int, val z: Int)
-            val holds = args[keysIdx + 1].split(",").mapNotNull {
-                val p = it.split(":"); if (p.size != 3) return@mapNotNull null
-                val b = when (p[0].lowercase()) {
-                    "up" -> emu.Button.UP; "down" -> emu.Button.DOWN; "left" -> emu.Button.LEFT; "right" -> emu.Button.RIGHT
-                    "a" -> emu.Button.A; "b" -> emu.Button.B; "x" -> emu.Button.X; "y" -> emu.Button.Y
-                    "l" -> emu.Button.L; "r" -> emu.Button.R; "start" -> emu.Button.START; "select" -> emu.Button.SELECT
-                    else -> return@mapNotNull null
-                }
-                Hold(b, p[1].toInt(), p[2].toInt())
+        // formato --keys: "botao:frameIni:frameFim,..." (ex.: "start:420:440,right:800:2000")
+        data class Hold(val b: emu.Button, val a: Int, val z: Int)
+        val holds: List<Hold> = if (keysIdx >= 0 && keysIdx + 1 < args.size) args[keysIdx + 1].split(",").mapNotNull {
+            val p = it.split(":"); if (p.size != 3) return@mapNotNull null
+            val b = when (p[0].lowercase()) {
+                "up" -> emu.Button.UP; "down" -> emu.Button.DOWN; "left" -> emu.Button.LEFT; "right" -> emu.Button.RIGHT
+                "a" -> emu.Button.A; "b" -> emu.Button.B; "x" -> emu.Button.X; "y" -> emu.Button.Y
+                "l" -> emu.Button.L; "r" -> emu.Button.R; "start" -> emu.Button.START; "select" -> emu.Button.SELECT
+                else -> return@mapNotNull null
             }
+            Hold(b, p[1].toInt(), p[2].toInt())
+        } else emptyList()
+        fun applyInput(fr: Int) { for (b in emu.Button.entries) core.setButton(b, holds.any { it.b == b && fr in it.a..it.z }) }
+
+        if (snesCore != null && args.contains("--pchist")) {
+            // histograma de PC nos últimos frames: revela loops de espera (com input opcional via --keys)
+            snesCore.bus.pcProbe = { (snesCore.cpu.pbr shl 16) or snesCore.cpu.pc }
+            val watchIdx = args.indexOf("--watch")
+            val watchAddr = if (watchIdx >= 0 && watchIdx + 1 < args.size) args[watchIdx + 1].toInt(16) else -1
+            val sampleFrom = (frames - 4).coerceAtLeast(1)
+            val watchAll = args.contains("--watchall") // registra a história inteira (não só o trecho travado)
+            val watchSeq = args.contains("--watchseq") // imprime as escritas por frame (últimos 10 frames)
+            if (watchAll) snesCore.bus.watchWram = watchAddr
+            val seqFrom = (frames - 10).coerceAtLeast(1)
+            var nmiAt = 0L; var irqAt = 0L
             for (fr in 1..frames) {
-                for (b in emu.Button.entries) core.setButton(b, holds.any { it.b == b && fr in it.a..it.z })
-                core.runFrame()
+                applyInput(fr)
+                if (fr == sampleFrom) {
+                    snesCore.samplePc = true; nmiAt = snesCore.cpu.nmiCount; irqAt = snesCore.cpu.irqCount
+                    if (!watchAll && !watchSeq) { snesCore.bus.watchWram = watchAddr; snesCore.bus.watchLog.clear() }
+                }
+                if (watchSeq && fr == seqFrom) snesCore.bus.watchWram = watchAddr
+                if (watchSeq && fr >= seqFrom) {
+                    snesCore.bus.watchLog.clear()
+                    core.runFrame()
+                    if (snesCore.bus.watchLog.isNotEmpty())
+                        println("  frame %d: %s".format(fr, snesCore.bus.watchLog.joinToString(" | ") { it.substringAfter("PC=") }))
+                } else core.runFrame()
             }
+            writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
+            println("── ${snesCore.debugInfo()} ──")
+            println("── NMIs=%d IRQs=%d nos últimos 4 frames ──".format(snesCore.cpu.nmiCount - nmiAt, snesCore.cpu.irqCount - irqAt))
+            println("── scanlines onde o IRQ foi processado (× vezes) ──")
+            println("  " + snesCore.irqScanHist.entries.sortedBy { it.key }.joinToString(" ") { "L${it.key}×${it.value}" })
+            if (snesCore.bus.watchWram >= 0) {
+                println("── escritas em \$%04X ──".format(snesCore.bus.watchWram))
+                if (snesCore.bus.watchLog.isEmpty()) println("  (NENHUMA escrita durante toda a execução)")
+                else snesCore.bus.watchLog.forEach { println("  $it") }
+            }
+            println("── PCs mais executados nos últimos 4 frames (loop de espera) ──")
+            snesCore.pcHist.entries.sortedByDescending { it.value }.take(16).forEach { (pc, n) ->
+                val bytes = (0..3).joinToString(" ") { "%02X".format(snesCore.bus.read(pc + it) and 0xFF) }
+                println("  %06X ×%-7d bytes: %s".format(pc, n, bytes))
+            }
+            return
+        }
+        if (snesCore != null && keysIdx >= 0 && keysIdx + 1 < args.size && !args.contains("--dsp")) {
+            for (fr in 1..frames) { applyInput(fr); core.runFrame() }
             writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
             println("── PNG (frame $frames, com input) em $outPath ── ${snesCore.debugInfo()}")
             return
@@ -106,7 +147,7 @@ fun main(args: Array<String>) {
             snesCore.bus.dsp1?.log = true
             snesCore.ppu.m7Log = true
             snesCore.bus.dma.log = true
-            repeat(frames) { core.runFrame() }
+            for (fr in 1..frames) { applyInput(fr); core.runFrame() }
             writePng(core.framebuffer, outPath, scale = 4, core.width, core.height)
             val d = snesCore.bus.dsp1
             if (d == null) println("── cartucho SEM DSP-1 (cart.hasDsp1=false) ──")

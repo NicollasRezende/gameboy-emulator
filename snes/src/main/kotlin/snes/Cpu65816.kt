@@ -20,6 +20,8 @@ class Cpu65816(private val bus: Bus65816) {
 
     var stopped = false; var waiting = false
     var irqLine = false; var nmiPending = false
+    var nmiCount = 0L; var irqCount = 0L // diagnóstico: interrupções processadas
+    var onIrq: (() -> Unit)? = null      // diagnóstico: chamado ao processar um IRQ (registra scanline)
 
     companion object {
         const val C = 0x01; const val Z = 0x02; const val I = 0x04; const val D = 0x08
@@ -258,8 +260,8 @@ class Cpu65816(private val bus: Bus65816) {
     fun step(): Int {
         val start = cycles
         normalize() // invariantes de hardware antes de executar (SH=01 em emulação, etc.)
-        if (nmiPending) { nmiPending = false; interrupt(0xFFEA, 0xFFFA, false); return (cycles - start).toInt() }
-        if (irqLine && p and I == 0) { interrupt(0xFFEE, 0xFFFE, false); return (cycles - start).toInt() }
+        if (nmiPending) { nmiPending = false; nmiCount++; interrupt(0xFFEA, 0xFFFA, false); return (cycles - start).toInt() }
+        if (irqLine && p and I == 0) { irqCount++; onIrq?.invoke(); interrupt(0xFFEE, 0xFFFE, false); return (cycles - start).toInt() }
         execute(fetch())
         normalize()
         return (cycles - start).toInt()
