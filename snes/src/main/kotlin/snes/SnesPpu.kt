@@ -51,6 +51,12 @@ class SnesPpu {
     private var wbglog = 0; private var wobjlog = 0
     private var tmw = 0; private var tsw = 0
     private var mosaic = 0
+    // SETINI ($2133) bit 2: overscan (239 linhas visíveis → VBlank/NMI em L240, não L225). O SMK
+    // liga overscan na corrida 1P: sem isso, o NMI dispara cedo e a ordem das escritas de $420C
+    // (HDMAEN) inverte, deixando o HDMA do Mode 7 desligado e a pista preta.
+    var overscan = false
+    /** Primeira scanline de VBlank (225 normal, 240 com overscan). */
+    fun vblankLine() = if (overscan) 240 else 225
 
     // ---------- conversão de cor ----------
     private fun bgr555(c: Int): Int {
@@ -85,8 +91,8 @@ class SnesPpu {
         } and 0x7FFF
     }
 
-    fun debug() = ("PPU: blank=%b bright=%d modo=%d TM=%02X | BG1 wide=%b big=%b hofs=%d vofs=%d")
-        .format(forcedBlank, brightness, bgMode and 0x07, mainScreen, bgSizeWide[0], bgSizeBig[0], bgHofs[0], bgVofs[0])
+    fun debug() = ("PPU: blank=%b bright=%d modo=%d TM=%02X ovscan=%b | BG1 wide=%b big=%b hofs=%d vofs=%d")
+        .format(forcedBlank, brightness, bgMode and 0x07, mainScreen, overscan, bgSizeWide[0], bgSizeBig[0], bgHofs[0], bgVofs[0])
     fun visibleBrightness() = if (forcedBlank) 0 else brightness
 
     fun writeReg(addr: Int, value: Int) {
@@ -134,17 +140,18 @@ class SnesPpu {
             0x30 -> cgwsel = v
             0x31 -> cgadsub = v
             0x32 -> { val i = v and 0x1F; if (v and 0x20 != 0) fixedB = i; if (v and 0x40 != 0) fixedG = i; if (v and 0x80 != 0) fixedR = i }
+            0x33 -> overscan = v and 0x04 != 0 // SETINI: bit 2 = overscan (239 linhas)
         }
     }
 
     fun oamDmaWrite(value: Int) = writeReg(0x2104, value)
 
     // ---------- timing ----------
-    /** Avança uma scanline; devolve true ao entrar em VBlank (linha 225). */
+    /** Avança uma scanline; devolve true ao entrar em VBlank (L225, ou L240 com overscan). */
     fun stepScanline(): Boolean {
-        if (scanline < 224) renderScanline(scanline)
+        if (scanline < 224) renderScanline(scanline) // framebuffer tem 224 linhas; overscan extra não é mostrado
         scanline++
-        if (scanline == 225) { frameReady = true; return true }
+        if (scanline == vblankLine()) { frameReady = true; return true }
         if (scanline >= 262) scanline = 0
         return false
     }

@@ -67,9 +67,9 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
                 } else cpu.step()
             }
             syncApu() // mantém o SPC700 em dia a cada scanline (e nos acessos às portas)
-            if (ppu.scanline < 224) bus.dma.stepHdma() // HDMA prepara os registradores ANTES do render (ex.: matriz Mode 7)
+            if (ppu.scanline < ppu.vblankLine()) bus.dma.stepHdma() // HDMA prepara os registradores ANTES do render (ex.: matriz Mode 7); roda até a última linha visível (240 com overscan)
             val enteredVBlank = ppu.stepScanline()
-            bus.inVBlank = ppu.scanline >= 225
+            bus.inVBlank = ppu.scanline >= ppu.vblankLine()
             if (enteredVBlank) {
                 bus.latchJoypad()
                 bus.nmiFlag = true
