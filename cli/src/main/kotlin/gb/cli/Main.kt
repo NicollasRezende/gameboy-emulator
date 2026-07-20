@@ -70,9 +70,12 @@ fun main(args: Array<String>) {
             val b = File(savePath).readBytes(); IntArray(b.size) { b[it].toInt() and 0xFF }
         } else null
 
+        // Firmware do DSP-1 (LLE): procura dsp1.bin/dsp1b.bin ao lado da ROM. Se achar, o SnesCore
+        // roda o microcódigo real do chip (matemática exata); senão cai no HLE.
+        val dsp1fw = loadDsp1Firmware(file.parentFile)
         val core: EmulatorCore = when {
             path.lowercase().endsWith(".nes") -> NesCore(rom, save)
-            path.lowercase().endsWith(".sfc") || path.lowercase().endsWith(".smc") -> snes.SnesCore(rom, save)
+            path.lowercase().endsWith(".sfc") || path.lowercase().endsWith(".smc") -> snes.SnesCore(rom, save, dsp1fw)
             else -> GbCore(rom, save)
         }
         val paletteName = args.indexOf("--palette").let { if (it >= 0 && it + 1 < args.size) args[it + 1] else null }
@@ -143,8 +146,12 @@ fun main(args: Array<String>) {
             return
         }
         if (snesCore != null && args.contains("--dsp")) {
-            // liga o logging do DSP-1 e imprime os comandos emitidos (guia da implementação)
-            snesCore.bus.dsp1?.log = true
+            // liga o logging do DSP-1. Os logs detalhados de comando só existem no HLE (SnesDsp1);
+            // no LLE (Upd7725) mostramos só o estado do µPD7725 + os registradores Mode 7.
+            val hle = snesCore.bus.dsp1 as? snes.SnesDsp1
+            hle?.log = true
+            val lle = snesCore.bus.dsp1 as? snes.Upd7725
+            lle?.let { it.trace = true; it.pcHist.fill(0); it.log = true } // rastreia a execução (não só o boot)
             snesCore.ppu.m7Log = true
             snesCore.bus.dma.log = true
             for (fr in 1..frames) { applyInput(fr); core.runFrame() }
@@ -153,16 +160,25 @@ fun main(args: Array<String>) {
             if (d == null) println("── cartucho SEM DSP-1 (cart.hasDsp1=false) ──")
             else {
                 println("── ${d.debug()} ──")
-                println("── história dos rasters (todos os Op01/Op0A) ──")
-                d.setupLog.forEach { println("  $it") }
-                println("── últimas transações DSP-1 (enquadradas por comando) ──")
-                d.transLog.forEach { println("  $it") }
+                (d as? snes.Upd7725)?.let {
+                    println("── µPD7725 PCs quentes no boot: ${it.hotPcs(16)} ──")
+                    println("── fluxo cru W/R do DR (LLE, cauda) ──")
+                    println("  " + it.rawLog.toList().takeLast(6000).joinToString(" "))
+                }
+                if (hle != null) {
+                    println("── história dos rasters (todos os Op01/Op0A) ──")
+                    hle.setupLog.forEach { println("  $it") }
+                    println("── últimas transações DSP-1 (enquadradas por comando) ──")
+                    hle.transLog.forEach { println("  $it") }
+                }
                 println("── registradores Mode 7 programados pelo jogo (últimas linhas) ──")
                 snesCore.ppu.m7LineLog.forEach { println("  $it") }
                 println("── canais HDMA (últimos initHdma) ──")
                 snesCore.bus.dma.chLog.forEach { println("  $it") }
-                println("── fluxo cru W/R (cauda, enquadramento real) ──")
-                println("  " + d.rawLog.toList().takeLast(1400).joinToString(" "))
+                if (hle != null) {
+                    println("── fluxo cru W/R (cauda, enquadramento real) ──")
+                    println("  " + hle.rawLog.toList().takeLast(1400).joinToString(" "))
+                }
             }
             return
         }
@@ -268,6 +284,26 @@ fun main(args: Array<String>) {
 }
 
 /** Exporta um framebuffer ARGB como PNG, ampliado por `scale`. */
+/**
+ * Procura o firmware do DSP-1 (dsp1.bin/dsp1b.bin, 8 KB) no diretório da ROM. Null se não achar.
+ * O LLE (µPD7725) ainda é OPT-IN via SNES_DSP1_LLE=1: o core do chip está validado (ver
+ * Upd7725Test), mas o Op0A/raster ainda não produz a matriz Mode 7 correta no SMK, então o
+ * padrão continua sendo o HLE (SnesDsp1), que renderiza a pista.
+ */
+private fun loadDsp1Firmware(dir: File?): IntArray? {
+    if (dir == null) return null
+    if (System.getenv("SNES_DSP1_LLE").isNullOrBlank()) return null // LLE em progresso; padrão = HLE
+    for (name in listOf("dsp1.bin", "dsp1.rom", "dsp1b.bin", "dsp1b.rom", "DSP1.bin")) {
+        val f = File(dir, name)
+        if (f.exists() && f.length() >= 0x2000L) {
+            val b = f.readBytes()
+            println("── DSP-1 LLE: firmware $name (${b.size} bytes) carregado — microcódigo real do µPD7725 ──")
+            return IntArray(b.size) { b[it].toInt() and 0xFF }
+        }
+    }
+    return null
+}
+
 private fun writePng(fb: IntArray, path: String, scale: Int, w: Int = 160, h: Int = 144) {
     val img = BufferedImage(w * scale, h * scale, BufferedImage.TYPE_INT_RGB)
     for (y in 0 until h) for (x in 0 until w) {

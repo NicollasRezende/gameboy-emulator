@@ -8,7 +8,7 @@ import emu.EmulatorCore
  * [EmulatorCore]. Timing por scanline (NTSC, 262 linhas); NMI no início do VBlank (linha 225).
  * Com áudio. Boota o Super Mario World.
  */
-class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
+class SnesCore(romBytes: IntArray, save: IntArray? = null, dsp1Firmware: IntArray? = null) : EmulatorCore {
     val cart = SnesCartridge(romBytes)
     val ppu = SnesPpu()
     val apu = SnesApu()
@@ -30,7 +30,8 @@ class SnesCore(romBytes: IntArray, save: IntArray? = null) : EmulatorCore {
         bus.syncApu = ::syncApu
         bus.irqAck = { cpu.irqLine = false } // ler $4211 baixa a linha de IRQ
         bus.cpuCycle = { cpu.cycles }        // posição H p/ o bit HBlank do $4212
-        if (cart.hasDsp1) bus.dsp1 = SnesDsp1() // coprocessador DSP-1 (Super Mario Kart, Pilotwings)
+        if (cart.hasDsp1) // LLE (µPD7725) se o firmware dsp1.bin foi fornecido; senão HLE
+            bus.dsp1 = if (dsp1Firmware != null && dsp1Firmware.size >= 0x2000) Upd7725(dsp1Firmware) else SnesDsp1()
         apu.reset()
         cpu.reset()
     }

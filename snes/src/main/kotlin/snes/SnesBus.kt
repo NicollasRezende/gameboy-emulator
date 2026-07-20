@@ -13,7 +13,7 @@ class SnesBus(
 ) : Bus65816 {
     val wram = IntArray(0x20000)
     lateinit var dma: SnesDma
-    var dsp1: SnesDsp1? = null // coprocessador DSP-1 (mapeamento depende de LoROM/HiROM)
+    var dsp1: Dsp1Core? = null // coprocessador DSP-1 (LLE Upd7725 se há firmware, senão HLE SnesDsp1)
 
     /**
      * Porta do DSP-1 no endereço dado: 0 = não é DSP, 1 = registrador de dados (DR),

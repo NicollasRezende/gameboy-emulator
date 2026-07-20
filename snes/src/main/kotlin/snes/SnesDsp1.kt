@@ -29,7 +29,7 @@ import kotlin.math.sqrt
  * Confere com o SMK real: com os parâmetros do attract demo o horizonte cai em Vva≈−78 e o
  * jogo pede raster a partir de Vs=−75.
  */
-class SnesDsp1 {
+class SnesDsp1 : Dsp1Core {
     private enum class Phase { IDLE, PARAMS, OUTPUT }
 
     companion object {
@@ -100,10 +100,10 @@ class SnesDsp1 {
     private fun setup(s: String) { if (setupLog.size < 320) setupLog.add(s) }
 
     /** SR: bit 7 (RQM) sempre pronto — HLE calcula instantaneamente, a CPU nunca trava. */
-    fun readSR(): Int = 0x80
+    override fun readSR(): Int = 0x80
 
     /** Escreve um byte no DR. Em IDLE, bit 7 = sync (ignorado); senão inicia/continua um comando. */
-    fun writeDR(v: Int) {
+    override fun writeDR(v: Int) {
         val b = v and 0xFF
         if (log) raw("W %02X".format(b))
         if (phase == Phase.OUTPUT) { // escrita aborta a saída pendente
@@ -125,7 +125,7 @@ class SnesDsp1 {
     }
 
     /** Lê um byte do DR. No fim da saída do Op0A, recomputa para Vs+1 (streaming). */
-    fun readDR(): Int {
+    override fun readDR(): Int {
         var v = 0
         if (phase == Phase.OUTPUT) {
             v = outBuf[outIdx]; outIdx++
@@ -295,12 +295,12 @@ class SnesDsp1 {
         outClamped(pivotY + h * s * sinAas + v * sd * cosAas)
     }
 
-    fun reset() {
+    override fun reset() {
         phase = Phase.IDLE; params.clear(); outBuf.clear(); outIdx = 0
         rasterVs = 0; rasterLines = 0; unimplemented = 0
     }
 
-    fun debug(): String {
+    override fun debug(): String {
         val top = cmdHist.withIndex().filter { it.value > 0 }.sortedByDescending { it.value }
             .take(8).joinToString(" ") { "%02X=%d".format(it.index, it.value) }
         return "DSP1: cmds[$top] raster=$rasterLines${if (unimplemented > 0) " unimpl=$unimplemented" else ""}"
